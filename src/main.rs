@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use bevy::animation::animate_targets;
 use bevy::core_pipeline::tonemapping::DebandDither;
 use bevy::prelude::*;
 use bevy_vello::{prelude::*, VelloPlugin};
@@ -19,32 +22,32 @@ fn main() {
             ..Default::default()
         })
         .add_systems(Startup, setup)
+        .add_systems(Update, setup_scene_once_loaded.before(animate_targets))
         .add_systems(Update, update)
         .run();
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+#[derive(Resource)]
+struct Animations {
+    animations: Vec<AnimationNodeIndex>,
+    #[allow(dead_code)]
+    graph: Handle<AnimationGraph>,
+}
+
+const GLB: &str = "exp2_mat.glb";
+
+fn setup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+) {
     commands.spawn((
         SceneBundle {
-            scene: asset_server.load(GltfAssetLabel::Scene(0).from_asset("penguin.gltf")),
+            scene: asset_server.load(GltfAssetLabel::Scene(0).from_asset(GLB)),
             ..default()
         },
         Penguin,
     ));
-
-    // commands.spawn(PointLightBundle {
-    //     point_light: PointLight {
-    //         shadows_enabled: true,
-    //         ..default()
-    //     },
-    //     transform: Transform::from_xyz(4.0, 8.0, 4.0),
-    //     ..default()
-    // });
-    // // camera
-    // commands.spawn(Camera3dBundle {
-    //     transform: Transform::from_xyz(-2.5, 4.5, 9.0).looking_at(Vec3::ZERO, Vec3::Y),
-    //     ..default()
-    // });
 
     commands.spawn((
         Camera2dBundle {
@@ -55,13 +58,71 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 
     commands.spawn(VelloSceneBundle::default());
+
+    // Build the animation graph
+    let mut graph = AnimationGraph::new();
+
+    let animations = graph
+        .add_clips(
+            [
+                // GltfAssetLabel::Animation(2).from_asset(GLB),
+                // GltfAssetLabel::Animation(1).from_asset(GLB),
+                GltfAssetLabel::Animation(0).from_asset(GLB),
+            ]
+            .into_iter()
+            .map(|path| asset_server.load(path)),
+            1.0,
+            graph.root,
+        )
+        .collect();
+
+    // Insert a resource with the current scene information
+    let graph = graphs.add(graph);
+    commands.insert_resource(Animations {
+        animations,
+        graph: graph.clone(),
+    });
 }
 
+// Once the scene is loaded, start the animation
+fn setup_scene_once_loaded(
+    mut commands: Commands,
+    animations: Res<Animations>,
+    mut players: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
+) {
+    for (entity, mut player) in &mut players {
+        let mut transitions = AnimationTransitions::new();
+
+        // Make sure to start the animation via the `AnimationTransitions`
+        // component. The `AnimationTransitions` component wants to manage all
+        // the animations and will get confused if the animations are started
+        // directly via the `AnimationPlayer`.
+        transitions
+            .play(&mut player, animations.animations[0], Duration::ZERO)
+            .repeat();
+
+        commands
+            .entity(entity)
+            .insert(animations.graph.clone())
+            .insert(transitions);
+    }
+}
+
+#[allow(clippy::type_complexity)]
 fn update(
     mut query_scene: Query<&mut VelloScene>,
     time: Res<Time>,
     meshes: ResMut<Assets<Mesh>>,
-    mut query: Query<(&GlobalTransform, &Handle<Mesh>), With<Handle<Mesh>>>,
+    materials: Res<Assets<StandardMaterial>>,
+    mut query: Query<
+        (
+            &GlobalTransform,
+            &Handle<Mesh>,
+            &Name,
+            &Handle<StandardMaterial>,
+        ),
+        With<Handle<Mesh>>,
+    >,
     mut trans: Query<&mut Transform, With<Penguin>>,
 ) {
     let sin_time = time.elapsed_seconds().sin().mul_add(0.5, 0.5);
@@ -70,6 +131,7 @@ fn update(
     *scene = VelloScene::default();
 
     let mut t_meshes = Vec::<Mesh>::new();
+    let mut t_colors = Vec::<Color>::new();
 
     // Animate color green to blue
     let c = Vec3::lerp(
@@ -87,26 +149,21 @@ fn update(
     );
 
     for mut t in trans.iter_mut() {
-        t.rotate_y(0.1);
+        t.rotate_y(0.03);
     }
 
-    for (t, m) in query.iter_mut() {
+    for (t, m, _name, mat_handle) in query.iter_mut() {
         if let Some(mesh) = meshes.get(m) {
+            let material = materials.get(mat_handle).expect("Mesh has no material");
+            // println!("{} {:?}", name, material);
             let transformed_mesh = mesh.clone().transformed_by((*t).into());
 
-            // let positions = transformed_mesh
-            //     .attribute(Mesh::ATTRIBUTE_POSITION)
-            //     .unwrap()
-            //     .as_float3()
-            //     .expect("`Mesh::ATTRIBUTE_POSITION` vertex attributes should be of type `float3`");
-
-            // println!("{:?}", positions[0]);
-
             t_meshes.push(transformed_mesh);
+            t_colors.push(material.base_color);
         }
     }
 
-    draw_collection(t_meshes, &mut scene);
+    // println!("Mesh count: {}", count);
 
-    // println!("--");
+    draw_collection(t_meshes, t_colors, &mut scene);
 }

@@ -26,14 +26,14 @@ fn sf(indecies: &[usize], verts: &[[f32; 3]]) -> Vec<[usize; 3]> {
     faces
 }
 
-pub fn draw_collection(meshes: Vec<Mesh>, scene: &mut VelloScene) {
+pub fn draw_collection(meshes: Vec<Mesh>, colors: Vec<Color>, scene: &mut VelloScene) {
     let mut verts = Vec::new();
     let mut indecies = Vec::new();
-    // let mut colors = Vec::new();
+    let mut cs = Vec::new();
 
     let mut offset = 0;
 
-    for mesh in meshes {
+    for (mesh, color) in meshes.iter().zip(colors) {
         let positions = mesh
             .attribute(Mesh::ATTRIBUTE_POSITION)
             .unwrap()
@@ -47,13 +47,13 @@ pub fn draw_collection(meshes: Vec<Mesh>, scene: &mut VelloScene) {
             .map(|i| i + offset)
             .collect::<Vec<usize>>();
 
-        // let clrs = vec![mesh.material.as_ref().unwrap(); positions.len()];
+        let clrs = vec![color; positions.len()];
 
         offset += positions.len();
 
         verts.extend_from_slice(positions);
         indecies.extend(indices);
-        // colors.extend(clrs);
+        cs.extend(clrs);
     }
 
     for f in sf(&indecies, &verts) {
@@ -70,18 +70,16 @@ pub fn draw_collection(meshes: Vec<Mesh>, scene: &mut VelloScene) {
         // let light = f32::log10(normal[2]) + 1.0;
 
         let perps = 0.0005;
-        // let clr = colors[a].base_color.to_linear();
+
+        let lin_cs = cs[a].to_linear();
 
         scene.fill(
             peniko::Fill::EvenOdd,
             Affine::IDENTITY,
             // peniko::Color::rgb((1.0 * 1.0) as f64, 0.0, 0.0),
-            // peniko::Color::rgb(
-            //     (clr.red * light) as f64,
-            //     (clr.green * light) as f64,
-            //     (clr.blue * light) as f64,
-            // ),
-            peniko::Color::RED,
+            // peniko::Color::from(cs[a]),
+            peniko::Color::rgb(lin_cs.red as f64, lin_cs.green as f64, lin_cs.blue as f64),
+            // peniko::Color::RED,
             None,
             &[
                 PathEl::MoveTo(
