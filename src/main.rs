@@ -10,6 +10,13 @@ use vello::AaConfig;
 mod draw;
 use draw::draw_collection;
 
+mod lottie;
+
+/*
+https://github.com/zimond/lottie-rs/
+https://lottie.github.io/lottie-spec/1.0/single-page/
+*/
+
 #[derive(Component)]
 struct Penguin;
 
@@ -34,7 +41,8 @@ struct Animations {
     graph: Handle<AnimationGraph>,
 }
 
-const GLB: &str = "exp2_mat.glb";
+// const GLB: &str = "exp2_mat.glb";
+const GLB: &str = "sphere.glb";
 
 fn setup(
     mut commands: Commands,
@@ -149,7 +157,7 @@ fn update(
     );
 
     for mut t in trans.iter_mut() {
-        t.rotate_y(0.03);
+        t.rotate_y(0.003);
     }
 
     for (t, m, _name, mat_handle) in query.iter_mut() {

@@ -3,6 +3,19 @@ use bevy_vello::prelude::*;
 
 use kurbo::{Affine, PathEl, Point};
 
+use crate::lottie::{self};
+
+/*
+How to determine whether a vertex is an edge vertex:
+
+Assuming vertex 'V' which has neighbors 'nV'
+
+The number of 'nV' has to be equal to the number of edges amongst 'nV'.
+
+Example;
+if vertex has 3 neighbors, the neighbors have to have 3 edges amongst themselves.
+*/
+
 fn face_normal(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> [f32; 3] {
     let (a, b, c) = (Vec3::from(a), Vec3::from(b), Vec3::from(c));
     (b - a).cross(c - a).normalize().into()
@@ -56,6 +69,8 @@ pub fn draw_collection(meshes: Vec<Mesh>, colors: Vec<Color>, scene: &mut VelloS
         cs.extend(clrs);
     }
 
+    let mut lottie = lottie::Lottie::new();
+
     for f in sf(&indecies, &verts) {
         let [a, b, c] = [f[0], f[1], f[2]];
         let normal = face_normal(verts[a], verts[b], verts[c]);
@@ -67,44 +82,33 @@ pub fn draw_collection(meshes: Vec<Mesh>, colors: Vec<Color>, scene: &mut VelloS
         let pa: Point = (verts[a][0], verts[a][1]).into();
         let pb: Point = (verts[b][0], verts[b][1]).into();
         let pc: Point = (verts[c][0], verts[c][1]).into();
-        // let light = f32::log10(normal[2]) + 1.0;
 
-        let perps = 0.0005;
+        let light = f32::log10(normal[2]) + 1.0;
 
         let lin_cs = cs[a].to_linear();
+
+        lottie.add_shape(
+            vec![(pa.x, -pa.y), (pb.x, -pb.y), (pc.x, -pc.y)],
+            (lin_cs.red as f64, lin_cs.green as f64, lin_cs.blue as f64),
+        );
 
         scene.fill(
             peniko::Fill::EvenOdd,
             Affine::IDENTITY,
-            // peniko::Color::rgb((1.0 * 1.0) as f64, 0.0, 0.0),
-            // peniko::Color::from(cs[a]),
-            peniko::Color::rgb(lin_cs.red as f64, lin_cs.green as f64, lin_cs.blue as f64),
-            // peniko::Color::RED,
+            peniko::Color::rgb(
+                (lin_cs.red * light) as f64,
+                (lin_cs.green * light) as f64,
+                (lin_cs.blue * light) as f64,
+            ),
             None,
             &[
-                PathEl::MoveTo(
-                    (
-                        pa.x + (pa.x * perps * verts[a][2] as f64),
-                        -pa.y + (pa.y * perps * verts[a][2] as f64),
-                    )
-                        .into(),
-                ),
-                PathEl::LineTo(
-                    (
-                        pb.x + (pb.x * perps * verts[b][2] as f64),
-                        -pb.y + (pb.y * perps * verts[b][2] as f64),
-                    )
-                        .into(),
-                ),
-                PathEl::LineTo(
-                    (
-                        pc.x + (pc.x * perps * verts[c][2] as f64),
-                        -pc.y + (pc.y * perps * verts[c][2] as f64),
-                    )
-                        .into(),
-                ),
+                PathEl::MoveTo((pa.x, -pa.y).into()),
+                PathEl::LineTo((pb.x, -pb.y).into()),
+                PathEl::LineTo((pc.x, -pc.y).into()),
                 PathEl::ClosePath,
             ],
         );
     }
+
+    // lottie.save_as("assets/generated.json");
 }
