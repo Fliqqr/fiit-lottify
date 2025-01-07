@@ -10,6 +10,7 @@ use vello::AaConfig;
 mod draw;
 use draw::draw_collection;
 
+mod edge;
 mod lottie;
 
 /*
@@ -42,7 +43,7 @@ struct Animations {
 }
 
 // const GLB: &str = "exp2_mat.glb";
-const GLB: &str = "sphere.glb";
+const GLB: &str = "penguin.glb";
 
 fn setup(
     mut commands: Commands,
@@ -105,9 +106,9 @@ fn setup_scene_once_loaded(
         // component. The `AnimationTransitions` component wants to manage all
         // the animations and will get confused if the animations are started
         // directly via the `AnimationPlayer`.
-        transitions
-            .play(&mut player, animations.animations[0], Duration::ZERO)
-            .repeat();
+        // transitions
+        //     .play(&mut player, animations.animations[0], Duration::ZERO)
+        //     .repeat();
 
         commands
             .entity(entity)
@@ -157,13 +158,19 @@ fn update(
     );
 
     for mut t in trans.iter_mut() {
-        t.rotate_y(0.003);
+        // t.rotate_y(0.003);
+        // t.rotate_x(0.005);
     }
 
-    for (t, m, _name, mat_handle) in query.iter_mut() {
+    for (t, m, name, mat_handle) in query.iter_mut() {
         if let Some(mesh) = meshes.get(m) {
             let material = materials.get(mat_handle).expect("Mesh has no material");
-            // println!("{} {:?}", name, material);
+            println!("{}", name);
+
+            // if name.as_str() != "Object_0" {
+            //     continue;
+            // }
+
             let transformed_mesh = mesh.clone().transformed_by((*t).into());
 
             t_meshes.push(transformed_mesh);
