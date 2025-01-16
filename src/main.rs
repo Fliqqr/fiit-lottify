@@ -43,7 +43,7 @@ struct Animations {
 }
 
 // const GLB: &str = "exp2_mat.glb";
-const GLB: &str = "penguin.glb";
+const GLB: &str = "p2.glb";
 
 fn setup(
     mut commands: Commands,
@@ -165,16 +165,18 @@ fn update(
     for (t, m, name, mat_handle) in query.iter_mut() {
         if let Some(mesh) = meshes.get(m) {
             let material = materials.get(mat_handle).expect("Mesh has no material");
-            println!("{}", name);
+            // println!("{}", name);
 
-            // if name.as_str() != "Object_0" {
-            //     continue;
-            // }
+            if name.as_str() != "Sphere.007" {
+                continue;
+            }
 
             let transformed_mesh = mesh.clone().transformed_by((*t).into());
 
             t_meshes.push(transformed_mesh);
             t_colors.push(material.base_color);
+
+            // break;
         }
     }
 

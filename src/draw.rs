@@ -61,28 +61,27 @@ fn hash_pos(pos: [f32; 3]) -> usize {
 
 struct Vertex {
     neighbors: HashSet<usize>,
-    loop_edges: u64,
-    is_edge: bool,
+    path: bool,
     ind: usize,
 }
 
 fn draw_frame(indices: &[usize], verts: &[[f32; 3]], scene: &mut VelloScene) {
     let sorted_faces = sort_faces(indices, verts);
 
-    println!("Faces: {:?}", sorted_faces);
+    // println!("Faces: {:?}", sorted_faces);
 
     for face in sorted_faces {
         let [a, b, c] = [face[0], face[1], face[2]];
         let normal = face_normal(verts[a], verts[b], verts[c]);
 
         if normal[2] <= 0.0 {
-            println!("Normal exc.");
+            // println!("Normal exc.");
             continue;
         }
 
         scene.stroke(
             &Stroke {
-                width: 0.01,
+                width: 0.001,
                 ..Default::default()
             },
             Affine::IDENTITY,
@@ -103,157 +102,90 @@ fn generate_shape(indices: &[usize], verts: &[[f32; 3]]) -> Vec<PathEl> {
     let sorted_faces = sort_faces(indices, verts);
 
     // println!("Faces: {:?}", sorted_faces);
+    let mut f_count = 0;
 
     for face in sorted_faces {
         let [a, b, c] = [face[0], face[1], face[2]];
         let normal = face_normal(verts[a], verts[b], verts[c]);
 
+        println!("normal: {}", normal[2]);
+
+        // This threshold shouldn't be needed, but Im currently too lazy
+        // to figure out what's causing the real issue
         if normal[2] <= 0.0 {
-            // println!("Normal exc.");
+            println!("Normal exc.");
             continue;
         }
+
+        f_count += 1;
 
         let hash_a = hash_pos(verts[a]);
         let hash_b = hash_pos(verts[b]);
         let hash_c = hash_pos(verts[c]);
 
-        // println!(
-        //     "face: \na: {:?} {}\nb: {:?} {}\nc: {:?} {}",
-        //     verts[a], hash_a, verts[b], hash_b, verts[c], hash_c
-        // );
+        for vert in [a, b, c] {
+            let hash = hash_pos(verts[vert]);
+            let nbr = HashSet::from([hash_a, hash_b, hash_c])
+                .difference(&[hash].into())
+                .cloned()
+                .collect();
 
-        if let Some(v) = mapping.get_mut(&hash_a) {
-            v.loop_edges += 1;
-            v.neighbors.extend([hash_b, hash_c]);
-
-            if v.loop_edges == (v.neighbors.len() as u64) {
-                v.is_edge = false;
+            if let Some(v) = mapping.get_mut(&hash) {
+                v.neighbors = v.neighbors.symmetric_difference(&nbr).cloned().collect();
+                continue;
             }
-        } else {
+
             mapping.insert(
-                hash_pos(verts[a]),
+                hash,
                 Vertex {
-                    neighbors: HashSet::from([hash_b, hash_c]),
-                    loop_edges: 1,
-                    is_edge: true,
-                    ind: a,
-                },
-            );
-        }
-
-        if let Some(v) = mapping.get_mut(&hash_b) {
-            v.loop_edges += 1;
-            v.neighbors.extend([hash_a, hash_c]);
-
-            if v.loop_edges == (v.neighbors.len() as u64) {
-                v.is_edge = false;
-            }
-        } else {
-            mapping.insert(
-                hash_pos(verts[b]),
-                Vertex {
-                    neighbors: HashSet::from([hash_a, hash_c]),
-                    loop_edges: 1,
-                    is_edge: true,
-                    ind: b,
-                },
-            );
-        }
-
-        if let Some(v) = mapping.get_mut(&hash_c) {
-            v.loop_edges += 1;
-            v.neighbors.extend([hash_a, hash_b]);
-
-            if v.loop_edges == (v.neighbors.len() as u64) {
-                v.is_edge = false;
-            }
-        } else {
-            mapping.insert(
-                hash_pos(verts[c]),
-                Vertex {
-                    neighbors: HashSet::from([hash_a, hash_b]),
-                    loop_edges: 1,
-                    is_edge: true,
-                    ind: c,
+                    neighbors: nbr,
+                    path: false,
+                    ind: vert,
                 },
             );
         }
     }
 
-    // println!("Mapping: {}", mapping.len());
+    // println!("Faces: {}", f_count);
 
-    let mut count = 0;
-    for (_, vert) in mapping.iter() {
-        if vert.is_edge {
-            count += 1;
-        }
-    }
-    // println!("Edges: {}", count);
+    let mut used = Vec::new();
+    let mut out = Vec::new();
 
-    if count < 3 {
-        return vec![];
-    }
+    for (hash, vert) in mapping.iter() {
+        if !vert.neighbors.is_empty() && !used.contains(hash) {
+            let mut pos = verts[vert.ind];
+            let mut current_vertex;
 
-    let mut seq = vec![];
-    let mut out = vec![];
-    let mut used = vec![];
+            out.push(PathEl::MoveTo((pos[0], -pos[1]).into()));
+            used.push(*hash);
 
-    for (index, vert) in mapping.iter() {
-        if vert.is_edge && !used.contains(&vert.ind) {
-            let mut curr = vert;
-            seq.push(vert.ind);
-            used.push(vert.ind);
+            current_vertex = Some(vert);
 
-            'outer: loop {
-                let mut priority: Option<&Vertex> = None;
-                let mut least = usize::MAX;
-
+            'outer: while let Some(curr) = current_vertex {
+                // println!("{:?}", curr.ind);
                 for nbr in &curr.neighbors {
-                    let n_vert = mapping.get(nbr).unwrap();
+                    if used.contains(nbr) {
+                        continue;
+                    };
 
-                    if n_vert.is_edge
-                        && !seq.contains(&n_vert.ind)
-                        && n_vert.neighbors.len() < least
-                    {
-                        priority = Some(n_vert);
-                        least = n_vert.neighbors.len();
-                    }
-                }
-                if let Some(next) = priority {
-                    seq.push(next.ind);
-                    used.push(next.ind);
-                    curr = next;
+                    let n_vert = mapping.get(nbr).unwrap();
+                    pos = verts[n_vert.ind];
+
+                    out.push(PathEl::LineTo((pos[0], -pos[1]).into()));
+                    used.push(*nbr);
+
+                    current_vertex = Some(n_vert);
                     continue 'outer;
                 }
-
                 break 'outer;
             }
-            let mut iterator = seq.iter();
-
-            let first = iterator.next().unwrap();
-            let pos = verts[*first];
-            out.push(PathEl::MoveTo((pos[0], -pos[1]).into()));
-
-            // println!("seq: {:?}", seq);
-
-            for vert in iterator {
-                let pos = verts[*vert];
-
-                out.push(PathEl::LineTo((pos[0], -pos[1]).into()));
-            }
             out.push(PathEl::ClosePath);
-            seq.clear();
         }
     }
-
-    // println!("{:?}", out);
-
     out
 }
 
 pub fn draw_collection(meshes: Vec<Mesh>, colors: Vec<Color>, scene: &mut VelloScene) {
-    let mut offset = 0;
-
     // println!("Meshes: {}", meshes.len());
 
     for (mesh, color) in meshes.iter().zip(colors) {
@@ -265,12 +197,7 @@ pub fn draw_collection(meshes: Vec<Mesh>, colors: Vec<Color>, scene: &mut VelloS
             .as_float3()
             .expect("`Mesh::ATTRIBUTE_POSITION` vertex attributes should be of type `float3`");
 
-        let indices = mesh
-            .indices()
-            .unwrap()
-            .iter()
-            .map(|i| i + offset)
-            .collect::<Vec<usize>>();
+        let indices = mesh.indices().unwrap().iter().collect::<Vec<usize>>();
 
         // println!("Pos {:?}", positions);
         // println!("Ind {:?}", indices);
@@ -280,7 +207,7 @@ pub fn draw_collection(meshes: Vec<Mesh>, colors: Vec<Color>, scene: &mut VelloS
         scene.fill(
             peniko::Fill::NonZero,
             // &Stroke {
-            //     width: 0.01,
+            //     width: 0.002,
             //     ..Default::default()
             // },
             Affine::IDENTITY,
@@ -291,19 +218,7 @@ pub fn draw_collection(meshes: Vec<Mesh>, colors: Vec<Color>, scene: &mut VelloS
             ),
             None,
             &generate_shape(&indices, positions).as_slice(),
-            // &[
-            //     PathEl::MoveTo((10.0, 10.0).into()),
-            //     PathEl::LineTo((-10.0, 10.0).into()),
-            //     PathEl::LineTo((-10.0, -10.0).into()),
-            //     PathEl::ClosePath,
-            //     PathEl::MoveTo((50.0, 50.0).into()),
-            //     PathEl::LineTo((30.0, 30.0).into()),
-            //     PathEl::LineTo((40.0, 30.0).into()),
-            //     PathEl::ClosePath,
-            // ],
         );
-
-        // offset += positions.len();
     }
 
     // let mut lottie = lottie::Lottie::new();
