@@ -1,16 +1,16 @@
-use std::time::Duration;
-
 use bevy::animation::animate_targets;
 use bevy::core_pipeline::tonemapping::DebandDither;
 use bevy::prelude::*;
 use bevy_vello::{prelude::*, VelloPlugin};
+use std::time::Duration;
 
+use kurbo::Affine;
+use lottie::Lottie;
 use vello::AaConfig;
 
 mod draw;
-use draw::draw_collection;
+use draw::{generate_collection, MeshShape};
 
-mod edge;
 mod lottie;
 
 /*
@@ -42,8 +42,21 @@ struct Animations {
     graph: Handle<AnimationGraph>,
 }
 
-// const GLB: &str = "exp2_mat.glb";
-const GLB: &str = "p2.glb";
+#[derive(Resource)]
+struct VectorShapes {
+    shapes: Vec<MeshShape>,
+}
+
+#[derive(Resource)]
+struct LottieFileHandler {
+    lottie: Lottie,
+    frame: u64,
+}
+
+// const GLB: &str = "ico.glb";
+const GLB: &str = "double_donut.glb";
+const FRAME_RATE: u64 = 30;
+const FRAMES: u64 = 60;
 
 fn setup(
     mut commands: Commands,
@@ -73,13 +86,9 @@ fn setup(
 
     let animations = graph
         .add_clips(
-            [
-                // GltfAssetLabel::Animation(2).from_asset(GLB),
-                // GltfAssetLabel::Animation(1).from_asset(GLB),
-                GltfAssetLabel::Animation(0).from_asset(GLB),
-            ]
-            .into_iter()
-            .map(|path| asset_server.load(path)),
+            [GltfAssetLabel::Animation(0).from_asset(GLB)]
+                .into_iter()
+                .map(|path| asset_server.load(path)),
             1.0,
             graph.root,
         )
@@ -91,13 +100,23 @@ fn setup(
         animations,
         graph: graph.clone(),
     });
+
+    commands.insert_resource(LottieFileHandler {
+        lottie: Lottie::new(FRAME_RATE),
+        frame: 0,
+    });
 }
 
 // Once the scene is loaded, start the animation
+#[allow(clippy::type_complexity)]
 fn setup_scene_once_loaded(
     mut commands: Commands,
     animations: Res<Animations>,
     mut players: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
+    query: Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
+    meshes: ResMut<Assets<Mesh>>,
+    lottie_fh: Option<ResMut<LottieFileHandler>>,
+    materials: Res<Assets<StandardMaterial>>,
 ) {
     for (entity, mut player) in &mut players {
         let mut transitions = AnimationTransitions::new();
@@ -106,14 +125,56 @@ fn setup_scene_once_loaded(
         // component. The `AnimationTransitions` component wants to manage all
         // the animations and will get confused if the animations are started
         // directly via the `AnimationPlayer`.
-        // transitions
-        //     .play(&mut player, animations.animations[0], Duration::ZERO)
-        //     .repeat();
+        transitions
+            .play(&mut player, animations.animations[0], Duration::ZERO)
+            .repeat();
 
         commands
             .entity(entity)
             .insert(animations.graph.clone())
             .insert(transitions);
+    }
+
+    if let Some(mut handle) = lottie_fh {
+        if handle.frame >= FRAMES {
+            if handle.frame > FRAMES {
+                return;
+            }
+            handle.lottie.save_as(&format!("{}.json", GLB));
+            handle.frame += 1;
+        }
+
+        println!("Frame: {}/{}", handle.frame, FRAMES);
+
+        let mut t_meshes = Vec::new();
+        let mut t_colors = Vec::new();
+
+        for (t, m, mat) in query.iter() {
+            let material = materials.get(mat).expect("Mesh has no material");
+
+            if let Some(mesh) = meshes.get(m) {
+                let transformed_mesh = mesh.clone().transformed_by((*t).into());
+
+                t_meshes.push(transformed_mesh);
+                t_colors.push(material.base_color);
+            }
+        }
+
+        if t_meshes.is_empty() {
+            return;
+        }
+
+        let mesh_shapes = generate_collection(t_meshes, t_colors);
+
+        let frame = handle.frame;
+
+        handle.lottie.add_layer(mesh_shapes, frame, frame + 1);
+        handle.frame += 1;
+
+        // let shapes = VectorShapes {
+        //     shapes: mesh_shapes,
+        // };
+        // commands.insert_resource(shapes);
     }
 }
 
@@ -121,26 +182,13 @@ fn setup_scene_once_loaded(
 fn update(
     mut query_scene: Query<&mut VelloScene>,
     time: Res<Time>,
-    meshes: ResMut<Assets<Mesh>>,
-    materials: Res<Assets<StandardMaterial>>,
-    mut query: Query<
-        (
-            &GlobalTransform,
-            &Handle<Mesh>,
-            &Name,
-            &Handle<StandardMaterial>,
-        ),
-        With<Handle<Mesh>>,
-    >,
-    mut trans: Query<&mut Transform, With<Penguin>>,
+    vector_shapes: Option<Res<VectorShapes>>,
+    mut trans: Query<&mut Transform>,
 ) {
     let sin_time = time.elapsed_seconds().sin().mul_add(0.5, 0.5);
     let mut scene = query_scene.single_mut();
     // Reset scene every frame
     *scene = VelloScene::default();
-
-    let mut t_meshes = Vec::<Mesh>::new();
-    let mut t_colors = Vec::<Color>::new();
 
     // Animate color green to blue
     let c = Vec3::lerp(
@@ -158,29 +206,31 @@ fn update(
     );
 
     for mut t in trans.iter_mut() {
-        // t.rotate_y(0.003);
-        // t.rotate_x(0.005);
+        // t.rotate_y(0.01);
+        // t.rotate_x(0.01);
+        // *t = Transform::from_rotation(
+        //     Quat::from_rotation_y(4.1),
+        //     // Quat::from_xyzw(3.0, 7.1, 0.0, 1.0),
+        // );
     }
 
-    for (t, m, name, mat_handle) in query.iter_mut() {
-        if let Some(mesh) = meshes.get(m) {
-            let material = materials.get(mat_handle).expect("Mesh has no material");
-            // println!("{}", name);
+    if let Some(shapes) = vector_shapes {
+        for mesh in &shapes.shapes {
+            // println!("Got shapes: {:?}", mesh);
 
-            if name.as_str() != "Sphere.007" {
-                continue;
-            }
+            let color = mesh.color.to_linear();
 
-            let transformed_mesh = mesh.clone().transformed_by((*t).into());
-
-            t_meshes.push(transformed_mesh);
-            t_colors.push(material.base_color);
-
-            // break;
+            scene.fill(
+                peniko::Fill::NonZero,
+                // &Stroke {
+                //     width: 0.02,
+                //     ..Default::default()
+                // },
+                Affine::IDENTITY,
+                peniko::Color::rgb(color.red.into(), color.green.into(), color.blue.into()),
+                None,
+                &mesh.shape.paths.as_slice(),
+            );
         }
     }
-
-    // println!("Mesh count: {}", count);
-
-    draw_collection(t_meshes, t_colors, &mut scene);
 }

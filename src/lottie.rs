@@ -2,23 +2,26 @@ use std::{fs::File, io::Write};
 
 use serde_json::{self, Value};
 
-pub fn base_lottie() -> Value {
-    serde_json::from_str::<Value>(
-        r#"{
+use crate::draw::{round_to, MeshShape};
+
+pub fn base_lottie(framerate: u64, frames: u64) -> Value {
+    serde_json::from_str::<Value>(&format!(
+        r#"{{
             "v": "5.7.5",
-            "fr": 100,
+            "fr": {},
             "ip": 0,
-            "op": 300,
+            "op": {},
             "w": 1200,
             "h": 900,
             "nm": "Comp 1",
             "ddd": 0,
-            "metadata": {},
+            "metadata": {{}},
             "assets": [],
             "layers": [],
             "markers": []
-        }"#,
-    )
+        }}"#,
+        framerate, frames
+    ))
     .unwrap()
 }
 
@@ -26,9 +29,9 @@ pub fn add_layer(json: &mut Value, layer: Value) {
     json["layers"].as_array_mut().unwrap().push(layer);
 }
 
-pub fn new_layer() -> Value {
-    serde_json::from_str::<Value>(
-        r#"{
+pub fn new_layer(ip: u64, op: u64) -> Value {
+    serde_json::from_str::<Value>(&format!(
+        r#"{{
             "ddd": 0,
             "ind": 1,
             "ty": 4,
@@ -36,121 +39,128 @@ pub fn new_layer() -> Value {
             "sr": 1,
             "ao": 0,
             "shapes": [],
-            "ip": 0,
-            "op": 301,
+            "ip": {},
+            "op": {},
             "st": 0,
             "bm": 0
-        }"#,
-    )
+        }}"#,
+        ip, op
+    ))
     .unwrap()
 }
 
-pub fn add_shape(layer: &mut Value, indices: &Vec<(f64, f64)>, color: &(f64, f64, f64)) {
-    let mut group = serde_json::from_str::<Value>(
-        r#"{
-            "ty": "gr",
-            "nm": "Shape Layer 1",
-            "it": [
-                {
-                    "ty": "sh",
-                    "d": 1,
-                    "ks": {
-                        "a": 0,
-                        "k": {
-                            "c": true,
-                            "v": []
-                        }
-                    }
-                },
-                {
-                    "ty": "fl",
-                    "c": {
-                        "a": 0,
-                        "k": [],
-                        "ix": 2
-                    },
-                    "o": {
-                        "a": 0,
-                        "k": 100,
-                        "ix": 2
-                    },
-                    "r": 1,
-                    "bm": 0
-                },
-                {
-                    "ty": "st",
-                    "c": {
-                        "a": 0,
-                        "k": [],
-                        "ix": 2
-                    },
-                    "o": {
-                        "a": 0,
-                        "k": 100,
-                        "ix": 2
-                    },
-                    "w": {
-                        "a": 0,
-                        "k": 2,
-                        "ix": 2
-                    },
-                    "lc": 1,
-                    "lj": 1,
-                    "ml": 4
-                },
-            ]
-        }
-    "#,
-    )
-    .unwrap();
-
-    group["it"][0]["ks"]["k"]["v"] = serde_json::to_value(indices).unwrap();
-
-    group["it"][1]["c"]["k"] = serde_json::to_value(color).unwrap();
-    group["it"][2]["c"]["k"] = serde_json::to_value(color).unwrap();
-
-    layer["shapes"].as_array_mut().unwrap().push(group);
+struct Group {
+    name: String,
+    items: Vec<Value>,
 }
 
-#[derive(Debug)]
-pub struct Shape {
-    indices: Vec<(f64, f64)>,
-    color: (f64, f64, f64),
+impl Group {
+    const BASE: &'static str = r#"{
+        "ty": "gr",
+        "nm": "",
+        "it": []
+    }"#;
+
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            items: Vec::new(),
+        }
+    }
+
+    pub fn add(&mut self, item: Value) {
+        self.items.push(item);
+    }
+
+    pub fn to_value(&self) -> Value {
+        let mut base = serde_json::from_str::<Value>(Self::BASE).unwrap();
+        base["nm"] = serde_json::to_value(&self.name).unwrap();
+        base["it"]
+            .as_array_mut()
+            .unwrap()
+            .extend(self.items.clone());
+        base
+    }
 }
 
-impl Shape {
-    pub fn scale(mut self, factor: f64) -> Self {
-        for (x, y) in &mut self.indices.iter_mut() {
-            *x *= factor;
-            *y *= factor;
+struct Stroke {
+    items: Vec<(f64, f64)>,
+}
+
+impl Stroke {
+    const BASE: &'static str = r#"{
+        "ty": "sh",
+        "d": 1,
+        "ks": {
+            "a": 0,
+            "k": {
+                "c": true,
+                "v": []
+            }
         }
-        self
+    }"#;
+
+    pub fn new() -> Self {
+        Self { items: Vec::new() }
+    }
+
+    pub fn add(&mut self, item: (f64, f64)) {
+        self.items.push(item)
+    }
+
+    pub fn to_value(&self) -> Value {
+        let mut base = serde_json::from_str::<Value>(Self::BASE).unwrap();
+        base["ks"]["k"]["v"] = serde_json::to_value(self.items.clone()).unwrap();
+        base
+    }
+}
+
+struct Fill {}
+
+impl Fill {
+    const BASE: &'static str = r#"{
+        "ty": "fl",
+        "c": {
+            "a": 0,
+            "k": [],
+            "ix": 2
+        },
+        "o": {
+            "a": 0,
+            "k": 100,
+            "ix": 2
+        },
+        "r": 1,
+        "bm": 0
+    }"#;
+
+    pub fn color(rgb: [f32; 3]) -> Value {
+        let mut base = serde_json::from_str::<Value>(Self::BASE).unwrap();
+        base["c"]["k"] = serde_json::to_value(rgb).unwrap();
+        base
     }
 }
 
 #[derive(Debug)]
 pub struct Lottie {
-    shapes: Vec<Shape>,
+    layers: Vec<Value>,
+    framerate: u64,
 }
 
 impl Lottie {
-    pub fn new() -> Self {
-        Lottie { shapes: Vec::new() }
-    }
-
-    pub fn add_shape(&mut self, indices: Vec<(f64, f64)>, color: (f64, f64, f64)) {
-        self.shapes.push(Shape { indices, color }.scale(100.0));
+    pub fn new(framerate: u64) -> Self {
+        Lottie {
+            layers: Vec::new(),
+            framerate,
+        }
     }
 
     pub fn serialize(&self) -> String {
-        let mut base = base_lottie();
-        let mut layer = new_layer();
+        let mut base = base_lottie(self.framerate, self.layers.len() as u64);
 
-        for shape in &self.shapes {
-            add_shape(&mut layer, &shape.indices, &shape.color);
+        for layer in &self.layers {
+            add_layer(&mut base, layer.clone());
         }
-
-        add_layer(&mut base, layer);
 
         base.to_string()
     }
@@ -161,5 +171,36 @@ impl Lottie {
         println!("Saving: {:?}", self);
 
         handle.write_all(self.serialize().as_bytes()).unwrap();
+    }
+
+    pub fn add_layer(&mut self, mesh_shapes: Vec<MeshShape>, ip: u64, op: u64) {
+        let mut layer = new_layer(ip, op);
+
+        for ms in &mesh_shapes {
+            let mut shape = Group::new("group".into());
+
+            let mut stroke = Stroke::new();
+
+            // Assuming every sub-shape ends with ClosePath
+            for p in &ms.shape.paths {
+                if let Some(point) = p.end_point() {
+                    stroke.add((round_to(point.x, 3), round_to(point.y, 3)));
+                } else {
+                    // end subgroup
+                    shape.add(stroke.to_value());
+                    stroke = Stroke::new();
+                }
+            }
+
+            let color = ms.color.to_linear();
+            shape.add(Fill::color([color.red, color.green, color.blue]));
+
+            layer["shapes"]
+                .as_array_mut()
+                .unwrap()
+                .push(shape.to_value());
+        }
+
+        self.layers.push(layer);
     }
 }
