@@ -29,22 +29,87 @@ pub fn add_layer(json: &mut Value, layer: Value) {
     json["layers"].as_array_mut().unwrap().push(layer);
 }
 
-pub fn new_layer(ip: u64, op: u64) -> Value {
+pub fn new_layer(name: &str, ip: u64, op: u64) -> Value {
     serde_json::from_str::<Value>(&format!(
         r#"{{
             "ddd": 0,
-            "ind": 1,
+            "ind": 0,
             "ty": 4,
-            "nm": "Shape Layer 1",
+            "nm": "{}",
             "sr": 1,
             "ao": 0,
             "shapes": [],
             "ip": {},
+            "st": {},
             "op": {},
-            "st": 0,
-            "bm": 0
+            "bm": 0,
+            "ks": {{
+                "p": {{
+                    "a": 0,
+                    "k": [
+                        0,
+                        0
+                    ],
+                    "ix": 2
+                }},
+                "a": {{
+                    "a": 0,
+                    "k": [
+                        0,
+                        0
+                    ],
+                    "ix": 2
+                }},
+                "s": {{
+                    "a": 0,
+                    "k": [
+                        100,
+                        100
+                    ],
+                    "ix": 2
+                }},
+                "r": {{
+                    "a": 0,
+                    "k": 0,
+                    "ix": 2
+                }},
+                "o": {{
+                    "a": 1,
+                    "k": [
+                        {{
+                            "t": 0,
+                            "s": [
+                                100
+                            ],
+                            "h": 1
+                        }},
+                        {{
+                            "t": 50,
+                            "s": [
+                                0
+                            ],
+                            "h": 1
+                        }}
+                    ],
+                    "ix": 2
+                }},
+                "sk": {{
+                    "a": 0,
+                    "k": 0,
+                    "ix": 2
+                }},
+                "sa": {{
+                    "a": 0,
+                    "k": 0,
+                    "ix": 2
+                }}
+            }}
         }}"#,
-        ip, op
+        // ip + 1,
+        name,
+        ip,
+        ip,
+        op,
     ))
     .unwrap()
 }
@@ -95,7 +160,9 @@ impl Stroke {
             "a": 0,
             "k": {
                 "c": true,
-                "v": []
+                "v": [],
+                "i": [],
+                "o": []
             }
         }
     }"#;
@@ -173,8 +240,8 @@ impl Lottie {
         handle.write_all(self.serialize().as_bytes()).unwrap();
     }
 
-    pub fn add_layer(&mut self, mesh_shapes: Vec<MeshShape>, ip: u64, op: u64) {
-        let mut layer = new_layer(ip, op);
+    pub fn add_layer(&mut self, mesh_shapes: Vec<MeshShape>, name: &str, ip: u64, op: u64) {
+        let mut layer = new_layer(name, ip, op);
 
         for ms in &mesh_shapes {
             let mut shape = Group::new("group".into());

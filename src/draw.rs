@@ -265,6 +265,7 @@ fn process_face(
     ProcessResult::Ok
 }
 
+#[derive(Clone)]
 pub struct Shape {
     pub paths: Vec<PathEl>,
 }
@@ -275,6 +276,7 @@ impl Shape {
     }
 }
 
+#[derive(Clone)]
 pub struct MeshShape {
     pub shape: Shape,
     pub color: Color,
@@ -458,6 +460,7 @@ pub fn generate_collection(meshes: Vec<Mesh>, colors: Vec<Color>) -> Vec<MeshSha
 
         let indices = mesh.indices().unwrap().iter().collect::<Vec<usize>>();
 
+        // Could run these in parallel
         if let Ok(shapes) = generate_shape(&indices, positions, color) {
             out.push(shapes);
         }

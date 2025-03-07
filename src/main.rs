@@ -1,5 +1,4 @@
 use bevy::animation::animate_targets;
-use bevy::core_pipeline::tonemapping::DebandDither;
 use bevy::prelude::*;
 use bevy_vello::{prelude::*, VelloPlugin};
 use std::time::Duration;
@@ -18,13 +17,25 @@ https://github.com/zimond/lottie-rs/
 https://lottie.github.io/lottie-spec/1.0/single-page/
 */
 
+/*
+TODO:
+
+1. Rotate scene to align camera with the viewport
+
+2. GUI
+
+3. Preview and framestepping
+
+4. Exporting frame as SVG
+*/
+
 #[derive(Component)]
 struct Penguin;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(bevy_pancam::PanCamPlugin)
+        // .add_plugins(bevy_pancam::PanCamPlugin)
         .add_plugins(VelloPlugin {
             antialiasing: AaConfig::Msaa16,
             ..Default::default()
@@ -54,30 +65,30 @@ struct LottieFileHandler {
 }
 
 // const GLB: &str = "ico.glb";
-const GLB: &str = "double_donut.glb";
-const FRAME_RATE: u64 = 30;
-const FRAMES: u64 = 60;
+const GLB: &str = "camera.glb";
+const FRAME_RATE: u64 = 1;
+const FRAMES: u64 = 1;
 
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
 ) {
-    commands.spawn((
-        SceneBundle {
-            scene: asset_server.load(GltfAssetLabel::Scene(0).from_asset(GLB)),
-            ..default()
-        },
-        Penguin,
-    ));
+    // Load the scene
+    // let scene_handle = asset_server.load(GltfAssetLabel::Scene(0).from_asset(GLB));
+    // commands.spawn((SceneRoot(scene_handle.clone()), Penguin));
 
-    commands.spawn((
-        Camera2dBundle {
-            deband_dither: DebandDither::Enabled,
-            ..Default::default()
-        },
-        bevy_pancam::PanCam::default(),
-    ));
+    // Set up 2D camera
+    commands.spawn(Camera2d {
+        // ..Default::default()
+    });
+
+    // TODO: Rotate scene to align with 2D camera
+
+    // commands.spawn((Camera2dBundle {
+    //     deband_dither: DebandDither::Enabled,
+    //     ..Default::default()
+    // },));
 
     commands.spawn(VelloSceneBundle::default());
 
@@ -113,7 +124,8 @@ fn setup_scene_once_loaded(
     mut commands: Commands,
     animations: Res<Animations>,
     mut players: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
-    query: Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
+    query: Query<(&GlobalTransform, &Mesh3d, &MeshMaterial3d<StandardMaterial>), With<Mesh3d>>,
+    // camera: Query<&Handle<Camera>>,
     meshes: ResMut<Assets<Mesh>>,
     lottie_fh: Option<ResMut<LottieFileHandler>>,
     materials: Res<Assets<StandardMaterial>>,
@@ -131,11 +143,12 @@ fn setup_scene_once_loaded(
 
         commands
             .entity(entity)
-            .insert(animations.graph.clone())
+            // .insert(animations.graph.clone())
             .insert(transitions);
     }
 
     if let Some(mut handle) = lottie_fh {
+        // we could handle multiple frames in parallel
         if handle.frame >= FRAMES {
             if handle.frame > FRAMES {
                 return;
@@ -149,11 +162,11 @@ fn setup_scene_once_loaded(
         let mut t_meshes = Vec::new();
         let mut t_colors = Vec::new();
 
-        for (t, m, mat) in query.iter() {
-            let material = materials.get(mat).expect("Mesh has no material");
+        for (transform, mesh, material) in query.iter() {
+            let material = materials.get(material).expect("Mesh has no material");
 
-            if let Some(mesh) = meshes.get(m) {
-                let transformed_mesh = mesh.clone().transformed_by((*t).into());
+            if let Some(mesh) = meshes.get(mesh) {
+                let transformed_mesh = mesh.clone().transformed_by((*transform).into());
 
                 t_meshes.push(transformed_mesh);
                 t_colors.push(material.base_color);
@@ -168,13 +181,18 @@ fn setup_scene_once_loaded(
 
         let frame = handle.frame;
 
-        handle.lottie.add_layer(mesh_shapes, frame, frame + 1);
+        handle.lottie.add_layer(
+            mesh_shapes.clone(),
+            &format!("frame {}", frame),
+            frame,
+            frame + 1,
+        );
         handle.frame += 1;
 
-        // let shapes = VectorShapes {
-        //     shapes: mesh_shapes,
-        // };
-        // commands.insert_resource(shapes);
+        let shapes = VectorShapes {
+            shapes: mesh_shapes,
+        };
+        commands.insert_resource(shapes);
     }
 }
 
@@ -183,9 +201,9 @@ fn update(
     mut query_scene: Query<&mut VelloScene>,
     time: Res<Time>,
     vector_shapes: Option<Res<VectorShapes>>,
-    mut trans: Query<&mut Transform>,
+    // mut trans: Query<&mut Transform>,
 ) {
-    let sin_time = time.elapsed_seconds().sin().mul_add(0.5, 0.5);
+    let sin_time = time.elapsed_secs().sin().mul_add(0.5, 0.5);
     let mut scene = query_scene.single_mut();
     // Reset scene every frame
     *scene = VelloScene::default();
@@ -200,23 +218,23 @@ fn update(
     scene.fill(
         peniko::Fill::NonZero,
         kurbo::Affine::default(),
-        peniko::Color::rgb(c.x as f64, c.y as f64, c.z as f64),
+        peniko::Color::new([c.x, c.y, c.z, 1.0]),
         None,
         &kurbo::RoundedRect::new(-50.0, -50.0, 50.0, 50.0, 0.0),
     );
 
-    for mut t in trans.iter_mut() {
-        // t.rotate_y(0.01);
-        // t.rotate_x(0.01);
-        // *t = Transform::from_rotation(
-        //     Quat::from_rotation_y(4.1),
-        //     // Quat::from_xyzw(3.0, 7.1, 0.0, 1.0),
-        // );
-    }
+    // for mut t in trans.iter_mut() {
+    //     // t.rotate_y(0.01);
+    //     // t.rotate_x(0.01);
+    //     // *t = Transform::from_rotation(
+    //     //     Quat::from_rotation_y(4.1),
+    //     //     // Quat::from_xyzw(3.0, 7.1, 0.0, 1.0),
+    //     // );
+    // }
 
     if let Some(shapes) = vector_shapes {
         for mesh in &shapes.shapes {
-            // println!("Got shapes: {:?}", mesh);
+            println!("Got shapes");
 
             let color = mesh.color.to_linear();
 
@@ -227,7 +245,7 @@ fn update(
                 //     ..Default::default()
                 // },
                 Affine::IDENTITY,
-                peniko::Color::rgb(color.red.into(), color.green.into(), color.blue.into()),
+                peniko::Color::new([color.red, color.green, color.blue, 1.0]),
                 None,
                 &mesh.shape.paths.as_slice(),
             );
