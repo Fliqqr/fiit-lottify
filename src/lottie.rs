@@ -235,7 +235,7 @@ impl Lottie {
     pub fn save_as(&self, file_name: &str) {
         let mut handle = File::create(file_name).unwrap();
 
-        println!("Saving: {:?}", self);
+        // println!("Saving: {:?}", self);
 
         handle.write_all(self.serialize().as_bytes()).unwrap();
     }

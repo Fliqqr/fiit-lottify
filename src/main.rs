@@ -1,6 +1,6 @@
-use bevy::animation::animate_targets;
-use bevy::core_pipeline::tonemapping::DebandDither;
 use bevy::prelude::*;
+use bevy::{animation::animate_targets, scene::SceneInstance};
+use bevy_vello::vello::wgpu::core::device::global;
 use bevy_vello::{prelude::*, VelloPlugin};
 use std::time::Duration;
 
@@ -31,7 +31,7 @@ TODO:
 */
 
 #[derive(Component)]
-struct Penguin;
+struct GltfScene;
 
 fn main() {
     App::new()
@@ -42,8 +42,10 @@ fn main() {
             ..Default::default()
         })
         .add_systems(Startup, setup)
+        .add_systems(SpawnScene, camera_setup)
         .add_systems(Update, setup_scene_once_loaded.before(animate_targets))
-        .add_systems(Update, update)
+        // .add_systems(Update, update)
+        .add_systems(Update, camera_setup)
         .run();
 }
 
@@ -66,9 +68,9 @@ struct LottieFileHandler {
 }
 
 // const GLB: &str = "ico.glb";
-const GLB: &str = "camera.glb";
-const FRAME_RATE: u64 = 30;
-const FRAMES: u64 = 120;
+const GLB: &str = "camera2.glb";
+const FRAME_RATE: u64 = 1;
+const FRAMES: u64 = 1;
 
 fn setup(
     mut commands: Commands,
@@ -80,15 +82,7 @@ fn setup(
             scene: asset_server.load(GltfAssetLabel::Scene(0).from_asset(GLB)),
             ..default()
         },
-        Penguin,
-    ));
-
-    commands.spawn((
-        Camera2dBundle {
-            deband_dither: DebandDither::Enabled,
-            ..Default::default()
-        },
-        bevy_pancam::PanCam::default(),
+        GltfScene,
     ));
 
     commands.spawn(VelloSceneBundle::default());
@@ -119,17 +113,46 @@ fn setup(
     });
 }
 
-// Once the scene is loaded, start the animation
 #[allow(clippy::type_complexity)]
-fn setup_scene_once_loaded(
+fn camera_setup(
+    mut commands: Commands,
+    cam_query: Query<(Entity, &Camera, &GlobalTransform), With<Camera3d>>,
+    mut scene_transform: Query<&mut Transform, (With<SceneInstance>, Without<Camera3d>)>,
+) {
+    // println!("Camera setup");
+
+    if let Ok((entity, camera, cam_transform)) = cam_query.get_single() {
+        // println!("Found {:?}", camera);
+        // println!("{:?}", cam_transform);
+
+        if let Ok(mut scene_trans) = scene_transform.get_single_mut() {
+            // println!("Old scene {:?}", scene_trans);
+
+            let inverse = Transform::from_matrix((*cam_transform).compute_matrix().inverse());
+            *scene_trans = *scene_trans * inverse;
+
+            // println!("Rotated scene: {:?}", scene_trans);
+            // println!("Rotated camera: {:?}", cam_transform);
+
+            commands.spawn((
+                Camera2dBundle {
+                    camera: camera.clone(),
+                    // transform: (*transform).into(),
+                    ..Default::default()
+                },
+                bevy_pancam::PanCam::default(),
+            ));
+
+            commands.entity(entity).remove::<Camera>();
+        }
+    };
+}
+
+#[allow(unused)]
+fn play_animation(
     mut commands: Commands,
     animations: Res<Animations>,
     mut players: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
-    query: Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
-    // camera: Query<&Handle<Camera>>,
-    meshes: ResMut<Assets<Mesh>>,
-    lottie_fh: Option<ResMut<LottieFileHandler>>,
-    materials: Res<Assets<StandardMaterial>>,
 ) {
     for (entity, mut player) in &mut players {
         let mut transitions = AnimationTransitions::new();
@@ -147,96 +170,66 @@ fn setup_scene_once_loaded(
             .insert(animations.graph.clone())
             .insert(transitions);
     }
+}
 
-    if let Some(mut handle) = lottie_fh {
-        // we could handle multiple frames in parallel
-        if handle.frame >= FRAMES {
-            if handle.frame > FRAMES {
-                return;
-            }
-            handle.lottie.save_as(&format!("{}.json", GLB));
-            handle.frame += 1;
-        }
-
-        println!("Frame: {}/{}", handle.frame, FRAMES);
-
-        let mut t_meshes = Vec::new();
-        let mut t_colors = Vec::new();
-
-        for (t, m, mat) in query.iter() {
-            let material = materials.get(mat).expect("Mesh has no material");
-
-            if let Some(mesh) = meshes.get(m) {
-                let transformed_mesh = mesh.clone().transformed_by((*t).into());
-
-                t_meshes.push(transformed_mesh);
-                t_colors.push(material.base_color);
-            }
-        }
-
-        if t_meshes.is_empty() {
+fn save_to_lottie_file(mut handle: LottieFileHandler) {
+    if handle.frame >= FRAMES {
+        if handle.frame > FRAMES {
             return;
         }
-
-        let mesh_shapes = generate_collection(t_meshes, t_colors);
-
-        let frame = handle.frame;
-
-        handle.lottie.add_layer(
-            mesh_shapes.clone(),
-            &format!("frame {}", frame),
-            frame,
-            frame + 1,
-        );
+        handle.lottie.save_as(&format!("{}.json", GLB));
         handle.frame += 1;
-
-        let shapes = VectorShapes {
-            shapes: mesh_shapes,
-        };
-        commands.insert_resource(shapes);
     }
 }
 
-#[allow(clippy::type_complexity)]
-fn update(
-    mut query_scene: Query<&mut VelloScene>,
-    time: Res<Time>,
-    vector_shapes: Option<Res<VectorShapes>>,
-    mut trans: Query<&mut Transform>,
-) {
-    let sin_time = time.elapsed_seconds().sin().mul_add(0.5, 0.5);
-    let mut scene = query_scene.single_mut();
-    // Reset scene every frame
-    *scene = VelloScene::default();
+#[allow(clippy::complexity)]
+fn load_mesh_data(
+    query: Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
+    meshes: Res<Assets<Mesh>>,
+    materials: Res<Assets<StandardMaterial>>,
+) -> Option<(Vec<Mesh>, Vec<Color>)> {
+    let mut t_meshes = Vec::new();
+    let mut t_colors = Vec::new();
 
-    // Animate color green to blue
-    let c = Vec3::lerp(
-        Vec3::new(-1.0, 1.0, -1.0),
-        Vec3::new(-1.0, 1.0, 1.0),
-        sin_time + 0.5,
-    );
+    for (global_transform, mesh_handle, material_handle) in query.iter() {
+        let material = materials
+            .get(material_handle)
+            .expect("Mesh has no material");
 
-    scene.fill(
-        peniko::Fill::NonZero,
-        kurbo::Affine::default(),
-        peniko::Color::rgb(c.x as f64, c.y as f64, c.z as f64),
-        None,
-        &kurbo::RoundedRect::new(-50.0, -50.0, 50.0, 50.0, 0.0),
-    );
+        if let Some(mesh) = meshes.get(mesh_handle) {
+            let transformed_mesh = mesh.clone().transformed_by((*global_transform).into());
 
-    for mut t in trans.iter_mut() {
-        // t.rotate_y(0.01);
-        // t.rotate_x(0.01);
-        // *t = Transform::from_rotation(
-        //     Quat::from_rotation_y(4.1),
-        //     // Quat::from_xyzw(3.0, 7.1, 0.0, 1.0),
-        // );
+            t_meshes.push(transformed_mesh);
+            t_colors.push(material.base_color);
+        }
     }
 
-    if let Some(shapes) = vector_shapes {
-        for mesh in &shapes.shapes {
-            // println!("Got shapes: {:?}", mesh);
+    if t_meshes.is_empty() {
+        return None;
+    }
 
+    Some((t_meshes, t_colors))
+}
+
+// Once the scene is loaded, start the animation
+#[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_arguments)]
+fn setup_scene_once_loaded(
+    // mut commands: Commands,
+    mut scene: Query<&mut VelloScene>,
+
+    query: Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
+    // lottie_fh: Option<ResMut<LottieFileHandler>>,
+    meshes: Res<Assets<Mesh>>,
+    materials: Res<Assets<StandardMaterial>>,
+) {
+    let mut scene = scene.single_mut();
+    *scene = VelloScene::default();
+
+    if let Some((t_meshes, t_colors)) = load_mesh_data(query, meshes, materials) {
+        let mesh_shapes = generate_collection(t_meshes, t_colors);
+
+        for mesh in mesh_shapes {
             let color = mesh.color.to_linear();
 
             scene.fill(
@@ -253,3 +246,35 @@ fn update(
         }
     }
 }
+
+// #[allow(clippy::type_complexity)]
+// fn update(
+//     mut query_scene: Query<&mut VelloScene>,
+//     // time: Res<Time>,
+//     vector_shapes: Option<Res<VectorShapes>>,
+// ) {
+//     // let sin_time = time.elapsed_seconds().sin().mul_add(0.5, 0.5);
+//     let mut scene = query_scene.single_mut();
+//     // Reset scene every frame
+//     *scene = VelloScene::default();
+
+//     if let Some(shapes) = vector_shapes {
+//         for mesh in &shapes.shapes {
+//             // println!("Got shapes: {:?}", mesh);
+
+//             let color = mesh.color.to_linear();
+
+//             scene.fill(
+//                 peniko::Fill::NonZero,
+//                 // &Stroke {
+//                 //     width: 0.02,
+//                 //     ..Default::default()
+//                 // },
+//                 Affine::IDENTITY,
+//                 peniko::Color::rgb(color.red.into(), color.green.into(), color.blue.into()),
+//                 None,
+//                 &mesh.shape.paths.as_slice(),
+//             );
+//         }
+//     }
+// }
