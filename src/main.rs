@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy::scene::SceneInstance;
+use bevy_egui::EguiPlugin;
 use bevy_vello::{prelude::*, VelloPlugin};
+
 use std::time::Duration;
 
 use kurbo::Affine;
@@ -12,6 +14,8 @@ use draw::{generate_collection, MeshShape};
 
 mod lottie;
 
+mod ui;
+
 /*
 https://github.com/zimond/lottie-rs/
 https://lottie.github.io/lottie-spec/1.0/single-page/
@@ -20,13 +24,17 @@ https://lottie.github.io/lottie-spec/1.0/single-page/
 /*
 TODO:
 
-1. Rotate scene to align camera with the viewport
+1. Rotate scene to align camera with the viewport - DONE
 
 2. GUI
 
-3. Preview and framestepping
+3. Preview and framestepping - STARTED
 
 4. Exporting frame as SVG
+
+5. Mesh occlusion flitering
+
+6. Shape ordering based on vertex positions
 */
 
 #[derive(Component)]
@@ -35,6 +43,7 @@ struct GltfScene;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(EguiPlugin)
         .add_plugins(bevy_pancam::PanCamPlugin)
         .add_plugins(VelloPlugin {
             antialiasing: AaConfig::Msaa16,
@@ -47,6 +56,7 @@ fn main() {
         // Figure out a way to make this not be an update
         .add_systems(Update, camera_setup)
         .add_systems(Update, keyboard_control)
+        .add_systems(Update, ui::controls_ui)
         .run();
 }
 
@@ -71,12 +81,27 @@ struct LottieFileHandler {
 #[derive(Resource)]
 struct FrameStepper {
     current_frame: u64,
+    total_frames: u64,
+}
+
+impl FrameStepper {
+    fn back(&mut self) {
+        if self.current_frame > 0 {
+            self.current_frame -= 1;
+        }
+    }
+
+    fn forward(&mut self) {
+        if self.current_frame < self.total_frames {
+            self.current_frame += 1;
+        }
+    }
 }
 
 // const GLB: &str = "ico.glb";
 const GLB: &str = "camera3.glb";
-const FRAME_RATE: u64 = 120;
-const FRAMES: u64 = 1;
+const FRAME_RATE: u64 = 60;
+const FRAMES: u64 = 60;
 
 fn setup(
     mut commands: Commands,
@@ -119,7 +144,10 @@ fn setup(
         frame: 0,
     });
 
-    commands.insert_resource(FrameStepper { current_frame: 0 });
+    commands.insert_resource(FrameStepper {
+        current_frame: 0,
+        total_frames: FRAMES,
+    });
 }
 
 #[allow(clippy::type_complexity)]
@@ -162,6 +190,7 @@ fn play_animation(
         // directly via the `AnimationPlayer`.
         transitions
             .play(&mut player, animations.animations[0], Duration::ZERO)
+            .repeat()
             .pause();
 
         commands
@@ -182,18 +211,18 @@ fn keyboard_control(
         };
         let playing_animation = player.animation_mut(playing_animation_index).unwrap();
 
-        // if keyboard_input.just_pressed(KeyCode::Space) {
-        //     if playing_animation.is_paused() {
-        //         playing_animation.resume();
-        //     } else {
-        //         playing_animation.pause();
-        //     }
-        // }
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            if playing_animation.is_paused() {
+                playing_animation.resume();
+            } else {
+                playing_animation.pause();
+            }
+        }
 
         if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
             // Backward 1 frame
-            playing_animation.seek_to((fs.current_frame - 1) as f32 / FRAME_RATE as f32);
-            fs.current_frame -= 1;
+            fs.back();
+            // playing_animation.seek_to(fs.current_frame as f32 / FRAME_RATE as f32);
 
             println!(
                 "LEFT seek: {} frame: {}",
@@ -204,14 +233,18 @@ fn keyboard_control(
 
         if keyboard_input.just_pressed(KeyCode::ArrowRight) {
             // Forward 1 frame
-            playing_animation.seek_to((fs.current_frame + 1) as f32 / FRAME_RATE as f32);
-            fs.current_frame += 1;
+            fs.forward();
+            // playing_animation.seek_to(fs.current_frame as f32 / FRAME_RATE as f32);
 
             println!(
                 "RIGHT seek: {} frame: {}",
                 playing_animation.seek_time(),
                 fs.current_frame
             );
+        }
+
+        if playing_animation.is_paused() {
+            playing_animation.seek_to(fs.current_frame as f32 / FRAME_RATE as f32);
         }
     }
 }
@@ -271,6 +304,7 @@ fn update(
     *scene = VelloScene::default();
 
     if let Some((t_meshes, t_colors)) = load_mesh_data(query, meshes, materials) {
+        // This should only happen when animation frame changes
         let mesh_shapes = generate_collection(t_meshes, t_colors);
 
         for mesh in mesh_shapes {
