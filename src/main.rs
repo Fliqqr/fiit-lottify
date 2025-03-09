@@ -1,6 +1,5 @@
 use bevy::prelude::*;
-use bevy::{animation::animate_targets, scene::SceneInstance};
-use bevy_vello::vello::wgpu::core::device::global;
+use bevy::scene::SceneInstance;
 use bevy_vello::{prelude::*, VelloPlugin};
 use std::time::Duration;
 
@@ -42,10 +41,12 @@ fn main() {
             ..Default::default()
         })
         .add_systems(Startup, setup)
-        .add_systems(SpawnScene, camera_setup)
-        .add_systems(Update, setup_scene_once_loaded.before(animate_targets))
-        // .add_systems(Update, update)
+        // .add_systems(Update, setup_scene_once_loaded.before(animate_targets))
+        .add_systems(Update, update)
+        .add_systems(Update, play_animation)
+        // Figure out a way to make this not be an update
         .add_systems(Update, camera_setup)
+        .add_systems(Update, keyboard_control)
         .run();
 }
 
@@ -67,9 +68,14 @@ struct LottieFileHandler {
     frame: u64,
 }
 
+#[derive(Resource)]
+struct FrameStepper {
+    current_frame: u64,
+}
+
 // const GLB: &str = "ico.glb";
-const GLB: &str = "camera2.glb";
-const FRAME_RATE: u64 = 1;
+const GLB: &str = "camera3.glb";
+const FRAME_RATE: u64 = 120;
 const FRAMES: u64 = 1;
 
 fn setup(
@@ -91,6 +97,7 @@ fn setup(
     let mut graph = AnimationGraph::new();
 
     let animations = graph
+        // Get the duration from the animation clip
         .add_clips(
             [GltfAssetLabel::Animation(0).from_asset(GLB)]
                 .into_iter()
@@ -111,6 +118,8 @@ fn setup(
         lottie: Lottie::new(FRAME_RATE),
         frame: 0,
     });
+
+    commands.insert_resource(FrameStepper { current_frame: 0 });
 }
 
 #[allow(clippy::type_complexity)]
@@ -119,20 +128,10 @@ fn camera_setup(
     cam_query: Query<(Entity, &Camera, &GlobalTransform), With<Camera3d>>,
     mut scene_transform: Query<&mut Transform, (With<SceneInstance>, Without<Camera3d>)>,
 ) {
-    // println!("Camera setup");
-
     if let Ok((entity, camera, cam_transform)) = cam_query.get_single() {
-        // println!("Found {:?}", camera);
-        // println!("{:?}", cam_transform);
-
         if let Ok(mut scene_trans) = scene_transform.get_single_mut() {
-            // println!("Old scene {:?}", scene_trans);
-
             let inverse = Transform::from_matrix((*cam_transform).compute_matrix().inverse());
             *scene_trans = *scene_trans * inverse;
-
-            // println!("Rotated scene: {:?}", scene_trans);
-            // println!("Rotated camera: {:?}", cam_transform);
 
             commands.spawn((
                 Camera2dBundle {
@@ -163,12 +162,57 @@ fn play_animation(
         // directly via the `AnimationPlayer`.
         transitions
             .play(&mut player, animations.animations[0], Duration::ZERO)
-            .repeat();
+            .pause();
 
         commands
             .entity(entity)
             .insert(animations.graph.clone())
             .insert(transitions);
+    }
+}
+
+fn keyboard_control(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut animation_players: Query<&mut AnimationPlayer>,
+    mut fs: ResMut<FrameStepper>,
+) {
+    for mut player in &mut animation_players {
+        let Some((&playing_animation_index, _)) = player.playing_animations().next() else {
+            continue;
+        };
+        let playing_animation = player.animation_mut(playing_animation_index).unwrap();
+
+        // if keyboard_input.just_pressed(KeyCode::Space) {
+        //     if playing_animation.is_paused() {
+        //         playing_animation.resume();
+        //     } else {
+        //         playing_animation.pause();
+        //     }
+        // }
+
+        if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
+            // Backward 1 frame
+            playing_animation.seek_to((fs.current_frame - 1) as f32 / FRAME_RATE as f32);
+            fs.current_frame -= 1;
+
+            println!(
+                "LEFT seek: {} frame: {}",
+                playing_animation.seek_time(),
+                fs.current_frame
+            );
+        }
+
+        if keyboard_input.just_pressed(KeyCode::ArrowRight) {
+            // Forward 1 frame
+            playing_animation.seek_to((fs.current_frame + 1) as f32 / FRAME_RATE as f32);
+            fs.current_frame += 1;
+
+            println!(
+                "RIGHT seek: {} frame: {}",
+                playing_animation.seek_time(),
+                fs.current_frame
+            );
+        }
     }
 }
 
@@ -214,7 +258,7 @@ fn load_mesh_data(
 // Once the scene is loaded, start the animation
 #[allow(clippy::type_complexity)]
 #[allow(clippy::too_many_arguments)]
-fn setup_scene_once_loaded(
+fn update(
     // mut commands: Commands,
     mut scene: Query<&mut VelloScene>,
 
@@ -246,35 +290,3 @@ fn setup_scene_once_loaded(
         }
     }
 }
-
-// #[allow(clippy::type_complexity)]
-// fn update(
-//     mut query_scene: Query<&mut VelloScene>,
-//     // time: Res<Time>,
-//     vector_shapes: Option<Res<VectorShapes>>,
-// ) {
-//     // let sin_time = time.elapsed_seconds().sin().mul_add(0.5, 0.5);
-//     let mut scene = query_scene.single_mut();
-//     // Reset scene every frame
-//     *scene = VelloScene::default();
-
-//     if let Some(shapes) = vector_shapes {
-//         for mesh in &shapes.shapes {
-//             // println!("Got shapes: {:?}", mesh);
-
-//             let color = mesh.color.to_linear();
-
-//             scene.fill(
-//                 peniko::Fill::NonZero,
-//                 // &Stroke {
-//                 //     width: 0.02,
-//                 //     ..Default::default()
-//                 // },
-//                 Affine::IDENTITY,
-//                 peniko::Color::rgb(color.red.into(), color.green.into(), color.blue.into()),
-//                 None,
-//                 &mesh.shape.paths.as_slice(),
-//             );
-//         }
-//     }
-// }
