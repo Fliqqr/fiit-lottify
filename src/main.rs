@@ -1,9 +1,11 @@
-use bevy::prelude::*;
+use bevy::ecs::system::RunSystemOnce;
 use bevy::scene::SceneInstance;
+use bevy::{ecs::system::SystemId, prelude::*};
 use bevy_egui::EguiPlugin;
 use bevy_pancam::DirectionKeys;
 use bevy_vello::{prelude::*, VelloPlugin};
 
+use std::thread;
 use std::time::Duration;
 
 use kurbo::Affine;
@@ -38,6 +40,19 @@ TODO:
 6. Shape ordering based on vertex positions
 */
 
+#[derive(Resource)]
+struct Exporter {
+    lottie: SystemId,
+}
+
+impl FromWorld for Exporter {
+    fn from_world(world: &mut World) -> Self {
+        Exporter {
+            lottie: world.register_system(export_lottie),
+        }
+    }
+}
+
 #[derive(Component)]
 struct GltfScene;
 
@@ -58,6 +73,7 @@ fn main() {
         .add_systems(Update, camera_setup)
         .add_systems(Update, keyboard_control)
         .add_systems(Update, ui::controls_ui)
+        .init_resource::<Exporter>()
         .run();
 }
 
@@ -66,12 +82,6 @@ struct Animations {
     animations: Vec<AnimationNodeIndex>,
     #[allow(dead_code)]
     graph: Handle<AnimationGraph>,
-}
-
-#[derive(Resource)]
-struct LottieFileHandler {
-    lottie: Lottie,
-    frame: u64,
 }
 
 #[derive(Resource)]
@@ -136,11 +146,6 @@ fn setup(
     commands.insert_resource(Animations {
         animations,
         graph: graph.clone(),
-    });
-
-    commands.insert_resource(LottieFileHandler {
-        lottie: Lottie::new(FRAME_RATE),
-        frame: 0,
     });
 
     commands.insert_resource(FrameStepper {
@@ -255,21 +260,63 @@ fn keyboard_control(
     }
 }
 
-fn save_to_lottie_file(mut handle: LottieFileHandler) {
-    if handle.frame >= FRAMES {
-        if handle.frame > FRAMES {
-            return;
+fn export_lottie(world: &mut World) {
+    println!("Exporting lottie...");
+    let mut file = Lottie::new(FRAME_RATE);
+
+    for frame in 0..FRAMES {
+        println!("Frame: {}/{}", frame, FRAMES);
+
+        world.run_system_once_with(frame, update_frame);
+        world.run_system_once(update_animation);
+        let shapes = world.run_system_once(get_shapes);
+
+        file.add_layer(shapes, &format!("Frame {}", frame), frame, frame + 1);
+    }
+
+    file.save_as(&format!("{}.json", GLB));
+}
+
+fn update_frame(In(frame): In<u64>, mut fs: ResMut<FrameStepper>) {
+    fs.current_frame = frame;
+}
+
+// Helper function to set the animation to the current_frame stored in FrameStepper
+fn update_animation(mut animation_players: Query<&mut AnimationPlayer>, fs: ResMut<FrameStepper>) {
+    println!("Update animation");
+    for mut player in &mut animation_players {
+        let Some((&index, _)) = player.playing_animations().next() else {
+            continue;
+        };
+        let animation = player.animation_mut(index).unwrap();
+
+        if !animation.is_paused() {
+            animation.pause();
         }
-        handle.lottie.save_as(&format!("{}.json", GLB));
-        handle.frame += 1;
+
+        println!("seek: {}", fs.current_frame);
+        animation.seek_to(fs.current_frame as f32 / FRAME_RATE as f32);
+    }
+}
+
+#[allow(clippy::type_complexity)]
+fn get_shapes(
+    query: Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
+    meshes: Res<Assets<Mesh>>,
+    materials: Res<Assets<StandardMaterial>>,
+) -> Vec<MeshShape> {
+    if let Some((t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
+        generate_collection(t_meshes, t_colors)
+    } else {
+        panic!("Fucked up");
     }
 }
 
 #[allow(clippy::complexity)]
 fn load_mesh_data(
-    query: Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
-    meshes: Res<Assets<Mesh>>,
-    materials: Res<Assets<StandardMaterial>>,
+    query: &Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
+    meshes: &Res<Assets<Mesh>>,
+    materials: &Res<Assets<StandardMaterial>>,
 ) -> Option<(Vec<Mesh>, Vec<Color>)> {
     let mut t_meshes = Vec::new();
     let mut t_colors = Vec::new();
@@ -313,7 +360,7 @@ fn update(
 
     let shapes = if fs.is_animation_playing {
         // Generate shapes on every update
-        if let Some((t_meshes, t_colors)) = load_mesh_data(query, meshes, materials) {
+        if let Some((t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
             // This should only happen when animation frame changes
 
             generate_collection(t_meshes, t_colors)
@@ -321,7 +368,7 @@ fn update(
             Vec::new()
         }
     } else if fs.last_rendered_frame != fs.current_frame || fs.shapes_buffer.is_none() {
-        if let Some((t_meshes, t_colors)) = load_mesh_data(query, meshes, materials) {
+        if let Some((t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
             let shapes = generate_collection(t_meshes, t_colors);
 
             fs.shapes_buffer = Some(shapes.clone());
