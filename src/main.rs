@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::scene::SceneInstance;
 use bevy_egui::EguiPlugin;
+use bevy_pancam::DirectionKeys;
 use bevy_vello::{prelude::*, VelloPlugin};
 
 use std::time::Duration;
@@ -68,11 +69,6 @@ struct Animations {
 }
 
 #[derive(Resource)]
-struct VectorShapes {
-    shapes: Vec<MeshShape>,
-}
-
-#[derive(Resource)]
 struct LottieFileHandler {
     lottie: Lottie,
     frame: u64,
@@ -82,6 +78,9 @@ struct LottieFileHandler {
 struct FrameStepper {
     current_frame: u64,
     total_frames: u64,
+    last_rendered_frame: u64,
+    is_animation_playing: bool,
+    shapes_buffer: Option<Vec<MeshShape>>,
 }
 
 impl FrameStepper {
@@ -147,6 +146,9 @@ fn setup(
     commands.insert_resource(FrameStepper {
         current_frame: 0,
         total_frames: FRAMES,
+        last_rendered_frame: 0,
+        is_animation_playing: false,
+        shapes_buffer: None,
     });
 }
 
@@ -164,10 +166,12 @@ fn camera_setup(
             commands.spawn((
                 Camera2dBundle {
                     camera: camera.clone(),
-                    // transform: (*transform).into(),
                     ..Default::default()
                 },
-                bevy_pancam::PanCam::default(),
+                bevy_pancam::PanCam {
+                    move_keys: DirectionKeys::NONE,
+                    ..Default::default()
+                },
             ));
 
             commands.entity(entity).remove::<Camera>();
@@ -214,15 +218,17 @@ fn keyboard_control(
         if keyboard_input.just_pressed(KeyCode::Space) {
             if playing_animation.is_paused() {
                 playing_animation.resume();
+                fs.is_animation_playing = true;
             } else {
                 playing_animation.pause();
+                fs.is_animation_playing = false;
             }
         }
 
         if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
             // Backward 1 frame
             fs.back();
-            // playing_animation.seek_to(fs.current_frame as f32 / FRAME_RATE as f32);
+            fs.shapes_buffer = None;
 
             println!(
                 "LEFT seek: {} frame: {}",
@@ -234,7 +240,7 @@ fn keyboard_control(
         if keyboard_input.just_pressed(KeyCode::ArrowRight) {
             // Forward 1 frame
             fs.forward();
-            // playing_animation.seek_to(fs.current_frame as f32 / FRAME_RATE as f32);
+            fs.shapes_buffer = None;
 
             println!(
                 "RIGHT seek: {} frame: {}",
@@ -299,28 +305,45 @@ fn update(
     // lottie_fh: Option<ResMut<LottieFileHandler>>,
     meshes: Res<Assets<Mesh>>,
     materials: Res<Assets<StandardMaterial>>,
+
+    mut fs: ResMut<FrameStepper>,
 ) {
     let mut scene = scene.single_mut();
     *scene = VelloScene::default();
 
-    if let Some((t_meshes, t_colors)) = load_mesh_data(query, meshes, materials) {
-        // This should only happen when animation frame changes
-        let mesh_shapes = generate_collection(t_meshes, t_colors);
+    let shapes = if fs.is_animation_playing {
+        // Generate shapes on every update
+        if let Some((t_meshes, t_colors)) = load_mesh_data(query, meshes, materials) {
+            // This should only happen when animation frame changes
 
-        for mesh in mesh_shapes {
-            let color = mesh.color.to_linear();
-
-            scene.fill(
-                peniko::Fill::NonZero,
-                // &Stroke {
-                //     width: 0.02,
-                //     ..Default::default()
-                // },
-                Affine::IDENTITY,
-                peniko::Color::rgb(color.red.into(), color.green.into(), color.blue.into()),
-                None,
-                &mesh.shape.paths.as_slice(),
-            );
+            generate_collection(t_meshes, t_colors)
+        } else {
+            Vec::new()
         }
+    } else if fs.last_rendered_frame != fs.current_frame || fs.shapes_buffer.is_none() {
+        if let Some((t_meshes, t_colors)) = load_mesh_data(query, meshes, materials) {
+            let shapes = generate_collection(t_meshes, t_colors);
+
+            fs.shapes_buffer = Some(shapes.clone());
+            fs.last_rendered_frame = fs.current_frame;
+
+            shapes
+        } else {
+            Vec::new()
+        }
+    } else {
+        fs.shapes_buffer.as_ref().unwrap().clone()
+    };
+
+    for mesh in shapes {
+        let color = mesh.color.to_linear();
+
+        scene.fill(
+            peniko::Fill::NonZero,
+            Affine::IDENTITY,
+            peniko::Color::rgb(color.red.into(), color.green.into(), color.blue.into()),
+            None,
+            &mesh.shape.paths.as_slice(),
+        );
     }
 }
