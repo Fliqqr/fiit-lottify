@@ -280,11 +280,23 @@ impl Shape {
 pub struct MeshShape {
     pub shape: Shape,
     pub color: Color,
+    pub mesh_id: AssetId<Mesh>,
+    pub name: Option<String>,
 }
 
 impl MeshShape {
-    pub fn new(shape: Shape, color: Color) -> Self {
-        Self { shape, color }
+    pub fn new(shape: Shape, color: Color, id: AssetId<Mesh>) -> Self {
+        Self {
+            shape,
+            color,
+            mesh_id: id,
+            name: None,
+        }
+    }
+
+    pub fn with_name(mut self, name: String) -> Self {
+        self.name = Some(name);
+        self
     }
 }
 
@@ -301,6 +313,7 @@ fn generate_shape(
     indices: &[usize],
     positions: &[[f32; 3]],
     color: Color,
+    id: AssetId<Mesh>,
 ) -> Result<MeshShape, Shape> {
     let mut tmp = Vec::new();
 
@@ -443,15 +456,19 @@ fn generate_shape(
         }
     }
 
-    let out = MeshShape::new(Shape::new(tmp), color);
+    let out = MeshShape::new(Shape::new(tmp), color, id);
 
     Ok(out)
 }
 
-pub fn generate_collection(meshes: Vec<Mesh>, colors: Vec<Color>) -> Vec<MeshShape> {
+pub fn generate_collection(
+    ids: Vec<AssetId<Mesh>>,
+    meshes: Vec<Mesh>,
+    colors: Vec<Color>,
+) -> Vec<MeshShape> {
     let mut out = Vec::new();
 
-    for (mesh, color) in meshes.iter().zip(colors) {
+    for ((mesh, id), color) in meshes.iter().zip(ids).zip(colors) {
         let positions = mesh
             .attribute(Mesh::ATTRIBUTE_POSITION)
             .unwrap()
@@ -461,7 +478,7 @@ pub fn generate_collection(meshes: Vec<Mesh>, colors: Vec<Color>) -> Vec<MeshSha
         let indices = mesh.indices().unwrap().iter().collect::<Vec<usize>>();
 
         // Could run these in parallel
-        if let Ok(shapes) = generate_shape(&indices, positions, color) {
+        if let Ok(shapes) = generate_shape(&indices, positions, color, id) {
             out.push(shapes);
         }
     }

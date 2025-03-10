@@ -1,8 +1,11 @@
+use bevy::app::{FixedMain, MainSchedulePlugin, RunFixedMainLoop};
 use bevy::ecs::system::RunSystemOnce;
+use bevy::render::Render;
 use bevy::scene::SceneInstance;
 use bevy::{ecs::system::SystemId, prelude::*};
 use bevy_egui::EguiPlugin;
 use bevy_pancam::DirectionKeys;
+use bevy_vello::vello::kurbo::{PathEl, Stroke};
 use bevy_vello::{prelude::*, VelloPlugin};
 
 use std::thread;
@@ -84,13 +87,19 @@ struct Animations {
     graph: Handle<AnimationGraph>,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 struct FrameStepper {
     current_frame: u64,
     total_frames: u64,
     last_rendered_frame: u64,
     is_animation_playing: bool,
     shapes_buffer: Option<Vec<MeshShape>>,
+    // highlight: Vec<PathEl>,
+}
+
+#[derive(Resource, Default)]
+struct PathHighlight {
+    paths: Vec<PathEl>,
 }
 
 impl FrameStepper {
@@ -154,7 +163,10 @@ fn setup(
         last_rendered_frame: 0,
         is_animation_playing: false,
         shapes_buffer: None,
+        // highlight: Vec::new(),
     });
+
+    commands.insert_resource(PathHighlight { paths: Vec::new() });
 }
 
 #[allow(clippy::type_complexity)]
@@ -271,6 +283,10 @@ fn export_lottie(world: &mut World) {
         world.run_system_once(update_animation);
         let shapes = world.run_system_once(get_shapes);
 
+        // Needed for animation to update
+        world.run_schedule(PreUpdate);
+        world.run_schedule(PostUpdate);
+
         file.add_layer(shapes, &format!("Frame {}", frame), frame, frame + 1);
     }
 
@@ -305,8 +321,8 @@ fn get_shapes(
     meshes: Res<Assets<Mesh>>,
     materials: Res<Assets<StandardMaterial>>,
 ) -> Vec<MeshShape> {
-    if let Some((t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
-        generate_collection(t_meshes, t_colors)
+    if let Some((ids, t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
+        generate_collection(ids, t_meshes, t_colors)
     } else {
         panic!("Fucked up");
     }
@@ -317,7 +333,8 @@ fn load_mesh_data(
     query: &Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
     meshes: &Res<Assets<Mesh>>,
     materials: &Res<Assets<StandardMaterial>>,
-) -> Option<(Vec<Mesh>, Vec<Color>)> {
+) -> Option<(Vec<AssetId<Mesh>>, Vec<Mesh>, Vec<Color>)> {
+    let mut ids = Vec::new();
     let mut t_meshes = Vec::new();
     let mut t_colors = Vec::new();
 
@@ -327,6 +344,8 @@ fn load_mesh_data(
             .expect("Mesh has no material");
 
         if let Some(mesh) = meshes.get(mesh_handle) {
+            ids.push(mesh_handle.id());
+
             let transformed_mesh = mesh.clone().transformed_by((*global_transform).into());
 
             t_meshes.push(transformed_mesh);
@@ -338,7 +357,7 @@ fn load_mesh_data(
         return None;
     }
 
-    Some((t_meshes, t_colors))
+    Some((ids, t_meshes, t_colors))
 }
 
 // Once the scene is loaded, start the animation
@@ -354,22 +373,28 @@ fn update(
     materials: Res<Assets<StandardMaterial>>,
 
     mut fs: ResMut<FrameStepper>,
+    mut highlight: ResMut<PathHighlight>,
+    projection: Query<&OrthographicProjection>,
 ) {
     let mut scene = scene.single_mut();
     *scene = VelloScene::default();
 
     let shapes = if fs.is_animation_playing {
+        highlight.paths.clear();
+
         // Generate shapes on every update
-        if let Some((t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
+        if let Some((ids, t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
             // This should only happen when animation frame changes
 
-            generate_collection(t_meshes, t_colors)
+            generate_collection(ids, t_meshes, t_colors)
         } else {
             Vec::new()
         }
     } else if fs.last_rendered_frame != fs.current_frame || fs.shapes_buffer.is_none() {
-        if let Some((t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
-            let shapes = generate_collection(t_meshes, t_colors);
+        highlight.paths.clear();
+
+        if let Some((ids, t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
+            let shapes = generate_collection(ids, t_meshes, t_colors);
 
             fs.shapes_buffer = Some(shapes.clone());
             fs.last_rendered_frame = fs.current_frame;
@@ -391,6 +416,20 @@ fn update(
             peniko::Color::rgb(color.red.into(), color.green.into(), color.blue.into()),
             None,
             &mesh.shape.paths.as_slice(),
+        );
+    }
+
+    if !highlight.paths.is_empty() {
+        // println!("highlight: {:?}", highlight.paths);
+
+        let scale = projection.single().scale;
+
+        scene.stroke(
+            &Stroke::new(scale as f64),
+            Affine::IDENTITY,
+            peniko::Color::rgb(1.0, 1.0, 1.0),
+            None,
+            &highlight.paths.as_slice(),
         );
     }
 }

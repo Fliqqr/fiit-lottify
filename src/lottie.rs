@@ -47,8 +47,8 @@ pub fn new_layer(name: &str, ip: u64, op: u64) -> Value {
                 "p": {{
                     "a": 0,
                     "k": [
-                        0,
-                        0
+                        600,
+                        450
                     ],
                     "ix": 2
                 }},

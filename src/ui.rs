@@ -9,13 +9,14 @@ use svg::node::element::path::Data;
 use svg::node::element::Path;
 use svg::Document;
 
-use crate::{Exporter, FrameStepper};
+use crate::{Exporter, FrameStepper, PathHighlight};
 
 pub fn controls_ui(
     exporter: Res<Exporter>,
     mut commands: Commands,
     mut contexts: EguiContexts,
     mut fs: ResMut<FrameStepper>,
+    mut highlight: ResMut<PathHighlight>,
 ) {
     let control_panel =
         egui::TopBottomPanel::new(egui::panel::TopBottomSide::Top, "Controls").resizable(false);
@@ -52,6 +53,58 @@ pub fn controls_ui(
                 commands.run_system(exporter.lottie);
             }
         });
+    });
+
+    let shape_layers = egui::SidePanel::new(egui::panel::Side::Left, "Layers").resizable(true);
+
+    shape_layers.show(contexts.ctx_mut(), |ui| {
+        if let Some(shapes) = &fs.shapes_buffer {
+            for shape in shapes {
+                let id = match shape.mesh_id {
+                    AssetId::Index { index, marker: _ } => format!("{}", index.to_bits()),
+                    AssetId::Uuid { uuid } => uuid.to_string(),
+                };
+
+                let name = shape.name.clone().unwrap_or(format!("Shape {}", id));
+
+                // ui.dnd_drag_source(id, payload, add_contents)
+
+                ui.vertical(|ui| {
+                    if ui
+                        .heading(name)
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .clicked()
+                    {
+                        highlight.paths = shape.shape.paths.clone();
+                    };
+
+                    let mut index = 0;
+                    let mut path_buffer = Vec::new();
+
+                    for path in shape.shape.paths.iter() {
+                        path_buffer.push(*path);
+
+                        if path.end_point().is_none() {
+                            if ui
+                                .label(format!("Path {}", index))
+                                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                .clicked()
+                            {
+                                println!("clicked path {}", index);
+                                path_buffer.push(*path);
+
+                                highlight.paths = path_buffer.clone();
+                            };
+                            index += 1;
+
+                            path_buffer.clear();
+                        }
+                    }
+                });
+
+                ui.separator();
+            }
+        }
     });
 
     let animation_bar = egui::TopBottomPanel::new(egui::panel::TopBottomSide::Bottom, "Animation");
