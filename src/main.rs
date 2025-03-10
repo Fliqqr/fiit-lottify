@@ -1,6 +1,4 @@
-use bevy::app::{FixedMain, MainSchedulePlugin, RunFixedMainLoop};
 use bevy::ecs::system::RunSystemOnce;
-use bevy::render::Render;
 use bevy::scene::SceneInstance;
 use bevy::{ecs::system::SystemId, prelude::*};
 use bevy_egui::EguiPlugin;
@@ -8,7 +6,6 @@ use bevy_pancam::DirectionKeys;
 use bevy_vello::vello::kurbo::{PathEl, Stroke};
 use bevy_vello::{prelude::*, VelloPlugin};
 
-use std::thread;
 use std::time::Duration;
 
 use kurbo::Affine;
@@ -75,8 +72,10 @@ fn main() {
         // Figure out a way to make this not be an update
         .add_systems(Update, camera_setup)
         .add_systems(Update, keyboard_control)
+        .add_systems(Update, cache_mesh_data)
         .add_systems(Update, ui::controls_ui)
         .init_resource::<Exporter>()
+        .init_resource::<CachedMeshData>()
         .run();
 }
 
@@ -172,11 +171,13 @@ fn setup(
 #[allow(clippy::type_complexity)]
 fn camera_setup(
     mut commands: Commands,
-    cam_query: Query<(Entity, &Camera, &GlobalTransform), With<Camera3d>>,
+    cam_query: Query<(Entity, &Camera, &GlobalTransform), (With<Camera3d>, Added<Camera3d>)>,
     mut scene_transform: Query<&mut Transform, (With<SceneInstance>, Without<Camera3d>)>,
 ) {
     if let Ok((entity, camera, cam_transform)) = cam_query.get_single() {
         if let Ok(mut scene_trans) = scene_transform.get_single_mut() {
+            println!("Camera setup");
+
             let inverse = Transform::from_matrix((*cam_transform).compute_matrix().inverse());
             *scene_trans = *scene_trans * inverse;
 
@@ -316,24 +317,30 @@ fn update_animation(mut animation_players: Query<&mut AnimationPlayer>, fs: ResM
 }
 
 #[allow(clippy::type_complexity)]
-fn get_shapes(
+fn get_shapes(mesh_data: Res<CachedMeshData>) -> Vec<MeshShape> {
+    generate_collection(
+        mesh_data.ids.clone(),
+        mesh_data.meshes.clone(),
+        mesh_data.colors.clone(),
+    )
+}
+
+#[derive(Resource, Default)]
+struct CachedMeshData {
+    ids: Vec<AssetId<Mesh>>,
+    meshes: Vec<Mesh>,
+    colors: Vec<Color>,
+}
+
+// TODO: This only needs to run once after camera setup
+// PS: Caching only makes sense if the scene rotation is static
+#[allow(clippy::complexity)]
+fn cache_mesh_data(
     query: Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
     meshes: Res<Assets<Mesh>>,
     materials: Res<Assets<StandardMaterial>>,
-) -> Vec<MeshShape> {
-    if let Some((ids, t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
-        generate_collection(ids, t_meshes, t_colors)
-    } else {
-        panic!("Fucked up");
-    }
-}
-
-#[allow(clippy::complexity)]
-fn load_mesh_data(
-    query: &Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
-    meshes: &Res<Assets<Mesh>>,
-    materials: &Res<Assets<StandardMaterial>>,
-) -> Option<(Vec<AssetId<Mesh>>, Vec<Mesh>, Vec<Color>)> {
+    mut mesh_data: ResMut<CachedMeshData>,
+) {
     let mut ids = Vec::new();
     let mut t_meshes = Vec::new();
     let mut t_colors = Vec::new();
@@ -354,27 +361,28 @@ fn load_mesh_data(
     }
 
     if t_meshes.is_empty() {
-        return None;
+        return;
     }
 
-    Some((ids, t_meshes, t_colors))
+    *mesh_data = CachedMeshData {
+        ids,
+        meshes: t_meshes,
+        colors: t_colors,
+    };
+
+    // println!("Cached mesh data");
+
+    // Some((ids, t_meshes, t_colors))
 }
 
-// Once the scene is loaded, start the animation
 #[allow(clippy::type_complexity)]
 #[allow(clippy::too_many_arguments)]
 fn update(
-    // mut commands: Commands,
     mut scene: Query<&mut VelloScene>,
-
-    query: Query<(&GlobalTransform, &Handle<Mesh>, &Handle<StandardMaterial>), With<Handle<Mesh>>>,
-    // lottie_fh: Option<ResMut<LottieFileHandler>>,
-    meshes: Res<Assets<Mesh>>,
-    materials: Res<Assets<StandardMaterial>>,
-
     mut fs: ResMut<FrameStepper>,
     mut highlight: ResMut<PathHighlight>,
     projection: Query<&OrthographicProjection>,
+    mesh_data: Res<CachedMeshData>,
 ) {
     let mut scene = scene.single_mut();
     *scene = VelloScene::default();
@@ -383,26 +391,24 @@ fn update(
         highlight.paths.clear();
 
         // Generate shapes on every update
-        if let Some((ids, t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
-            // This should only happen when animation frame changes
-
-            generate_collection(ids, t_meshes, t_colors)
-        } else {
-            Vec::new()
-        }
+        generate_collection(
+            mesh_data.ids.clone(),
+            mesh_data.meshes.clone(),
+            mesh_data.colors.clone(),
+        )
     } else if fs.last_rendered_frame != fs.current_frame || fs.shapes_buffer.is_none() {
         highlight.paths.clear();
 
-        if let Some((ids, t_meshes, t_colors)) = load_mesh_data(&query, &meshes, &materials) {
-            let shapes = generate_collection(ids, t_meshes, t_colors);
+        let shapes = generate_collection(
+            mesh_data.ids.clone(),
+            mesh_data.meshes.clone(),
+            mesh_data.colors.clone(),
+        );
 
-            fs.shapes_buffer = Some(shapes.clone());
-            fs.last_rendered_frame = fs.current_frame;
+        fs.shapes_buffer = Some(shapes.clone());
+        fs.last_rendered_frame = fs.current_frame;
 
-            shapes
-        } else {
-            Vec::new()
-        }
+        shapes
     } else {
         fs.shapes_buffer.as_ref().unwrap().clone()
     };

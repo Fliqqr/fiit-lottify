@@ -317,7 +317,12 @@ fn generate_shape(
 ) -> Result<MeshShape, Shape> {
     let mut tmp = Vec::new();
 
-    let mut curr_face_batch = sort_faces(indices, positions);
+    // let mut curr_face_batch = sort_faces(indices, positions);
+    let mut curr_face_batch: Vec<[usize; 3]> = indices
+        .chunks_exact(3)
+        .map(|chunk| [chunk[0], chunk[1], chunk[2]])
+        .collect();
+
     let mut skipped_faces = Vec::new();
 
     let mut rotation = None::<bool>;
