@@ -9,7 +9,7 @@ use svg::node::element::path::Data;
 use svg::node::element::Path;
 use svg::Document;
 
-use crate::{Exporter, FrameStepper, PathHighlight};
+use crate::{CachedMeshData, Exporter, FrameStepper, PathHighlight};
 
 pub fn controls_ui(
     exporter: Res<Exporter>,
@@ -17,6 +17,7 @@ pub fn controls_ui(
     mut contexts: EguiContexts,
     mut fs: ResMut<FrameStepper>,
     mut highlight: ResMut<PathHighlight>,
+    mut mesh_data: ResMut<CachedMeshData>,
 ) {
     let control_panel =
         egui::TopBottomPanel::new(egui::panel::TopBottomSide::Top, "Controls").resizable(false);
@@ -58,8 +59,20 @@ pub fn controls_ui(
     let shape_layers = egui::SidePanel::new(egui::panel::Side::Left, "Layers").resizable(true);
 
     shape_layers.show(contexts.ctx_mut(), |ui| {
+        let mut new_ordering = Vec::new();
+
         if let Some(shapes) = &fs.shapes_buffer {
-            for shape in shapes {
+            new_ordering = mesh_data.ordering.clone();
+
+            if shapes.is_empty() {
+                return;
+            }
+
+            for (index, shape_idx) in mesh_data.ordering.iter().enumerate() {
+                let shape = &shapes[*shape_idx];
+                // }
+
+                // for (shape_idx, shape) in shapes.iter().enumerate() {
                 let id = match shape.mesh_id {
                     AssetId::Index { index, marker: _ } => format!("{}", index.to_bits()),
                     AssetId::Uuid { uuid } => uuid.to_string(),
@@ -70,6 +83,13 @@ pub fn controls_ui(
                 // ui.dnd_drag_source(id, payload, add_contents)
 
                 ui.vertical(|ui| {
+                    if ui.button("up").clicked() {
+                        new_ordering.swap(index, index - 1);
+                    };
+                    if ui.button("down").clicked() {
+                        new_ordering.swap(index, index + 1);
+                    };
+
                     if ui
                         .heading(name)
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -104,6 +124,11 @@ pub fn controls_ui(
 
                 ui.separator();
             }
+        }
+        if !new_ordering.is_empty() {
+            // println!("{:?}", new_ordering);
+
+            mesh_data.ordering = new_ordering;
         }
     });
 

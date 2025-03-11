@@ -67,13 +67,19 @@ fn main() {
         })
         .add_systems(Startup, setup)
         // .add_systems(Update, setup_scene_once_loaded.before(animate_targets))
-        .add_systems(Update, update)
-        .add_systems(Update, play_animation)
-        // Figure out a way to make this not be an update
-        .add_systems(Update, camera_setup)
-        .add_systems(Update, keyboard_control)
-        .add_systems(Update, cache_mesh_data)
-        .add_systems(Update, ui::controls_ui)
+        .add_systems(
+            Update,
+            (
+                camera_setup,
+                cache_mesh_data,
+                cache_mesh_data.after(camera_setup),
+                mesh_ordering,
+                play_animation,
+                keyboard_control,
+                ui::controls_ui,
+                update,
+            ),
+        )
         .init_resource::<Exporter>()
         .init_resource::<CachedMeshData>()
         .run();
@@ -325,14 +331,26 @@ fn get_shapes(mesh_data: Res<CachedMeshData>) -> Vec<MeshShape> {
     )
 }
 
+#[allow(clippy::type_complexity)]
+fn mesh_ordering(
+    query: Query<&Handle<Mesh>, (With<Handle<Mesh>>, Added<Handle<Mesh>>)>,
+    mut mesh_data: ResMut<CachedMeshData>,
+) {
+    if !query.is_empty() {
+        println!("Mesh ordering");
+        mesh_data.ordering = query.iter().enumerate().map(|(i, _)| i).collect();
+    }
+}
+
 #[derive(Resource, Default)]
 struct CachedMeshData {
     ids: Vec<AssetId<Mesh>>,
     meshes: Vec<Mesh>,
     colors: Vec<Color>,
+    ordering: Vec<usize>,
 }
 
-// TODO: This only needs to run once after camera setup
+// TODO: This only needs to run every time the frame changes
 // PS: Caching only makes sense if the scene rotation is static
 #[allow(clippy::complexity)]
 fn cache_mesh_data(
@@ -341,6 +359,8 @@ fn cache_mesh_data(
     materials: Res<Assets<StandardMaterial>>,
     mut mesh_data: ResMut<CachedMeshData>,
 ) {
+    // println!("Caching mesh data...");
+
     let mut ids = Vec::new();
     let mut t_meshes = Vec::new();
     let mut t_colors = Vec::new();
@@ -361,16 +381,21 @@ fn cache_mesh_data(
     }
 
     if t_meshes.is_empty() {
+        // println!("No meshes");
         return;
     }
 
-    *mesh_data = CachedMeshData {
-        ids,
-        meshes: t_meshes,
-        colors: t_colors,
-    };
+    // println!("DONE");
+    mesh_data.ids = ids;
+    mesh_data.meshes = t_meshes;
+    mesh_data.colors = t_colors;
 
-    // println!("Cached mesh data");
+    // *mesh_data = CachedMeshData {
+    //     ids,
+    //     meshes: t_meshes,
+    //     colors: t_colors,
+    //     ordering: Vec::new(),
+    // };
 
     // Some((ids, t_meshes, t_colors))
 }
@@ -413,7 +438,15 @@ fn update(
         fs.shapes_buffer.as_ref().unwrap().clone()
     };
 
-    for mesh in shapes {
+    if shapes.is_empty() {
+        return;
+    }
+
+    for index in &mesh_data.ordering {
+        let mesh = &shapes[*index];
+        // }
+
+        // for mesh in shapes {
         let color = mesh.color.to_linear();
 
         scene.fill(
