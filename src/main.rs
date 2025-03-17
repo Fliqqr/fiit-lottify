@@ -324,11 +324,16 @@ fn update_animation(mut animation_players: Query<&mut AnimationPlayer>, fs: ResM
 
 #[allow(clippy::type_complexity)]
 fn get_shapes(mesh_data: Res<CachedMeshData>) -> Vec<MeshShape> {
-    generate_collection(
+    let mut out = Vec::new();
+    let shapes = generate_collection(
         mesh_data.ids.clone(),
         mesh_data.meshes.clone(),
         mesh_data.colors.clone(),
-    )
+    );
+    for index in &mesh_data.ordering {
+        out.push(shapes[*index].clone());
+    }
+    out
 }
 
 #[allow(clippy::type_complexity)]

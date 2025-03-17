@@ -117,19 +117,22 @@ pub fn new_layer(name: &str, ip: u64, op: u64) -> Value {
 struct Group {
     name: String,
     items: Vec<Value>,
+    index: u64,
 }
 
 impl Group {
     const BASE: &'static str = r#"{
         "ty": "gr",
+        "ind": 0,
         "nm": "",
         "it": []
     }"#;
 
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, index: u64) -> Self {
         Self {
             name,
             items: Vec::new(),
+            index,
         }
     }
 
@@ -144,6 +147,7 @@ impl Group {
             .as_array_mut()
             .unwrap()
             .extend(self.items.clone());
+        base["ind"] = self.index.into();
         base
     }
 }
@@ -243,8 +247,8 @@ impl Lottie {
     pub fn add_layer(&mut self, mesh_shapes: Vec<MeshShape>, name: &str, ip: u64, op: u64) {
         let mut layer = new_layer(name, ip, op);
 
-        for ms in &mesh_shapes {
-            let mut shape = Group::new("group".into());
+        for (index, ms) in mesh_shapes.iter().enumerate() {
+            let mut shape = Group::new("group".into(), index as u64);
 
             let mut stroke = Stroke::new();
 
