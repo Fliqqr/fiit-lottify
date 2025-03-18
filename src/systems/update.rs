@@ -76,7 +76,7 @@ pub fn update(
         scene.stroke(
             &Stroke::new(scale as f64),
             Affine::IDENTITY,
-            peniko::Color::rgb(1.0, 1.0, 1.0),
+            peniko::Color::rgb(0.8, 0.85, 1.0),
             None,
             &highlight.paths.as_slice(),
         );

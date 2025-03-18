@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy::{animation::AnimationTarget, prelude::*};
+use bevy::prelude::*;
 
 use crate::{FrameStepper, FRAME_RATE};
 
