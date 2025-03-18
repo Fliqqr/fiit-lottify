@@ -13,23 +13,23 @@ fn face_normal(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> [f32; 3] {
     (b - a).cross(c - a).normalize().into()
 }
 
-fn sort_faces(indices: &[usize], verts: &[[f32; 3]]) -> Vec<[usize; 3]> {
-    let mut faces: Vec<[usize; 3]> = indices
-        .chunks_exact(3)
-        .map(|chunk| [chunk[0], chunk[1], chunk[2]])
-        .collect();
+// fn sort_faces(indices: &[usize], verts: &[[f32; 3]]) -> Vec<[usize; 3]> {
+//     let mut faces: Vec<[usize; 3]> = indices
+//         .chunks_exact(3)
+//         .map(|chunk| [chunk[0], chunk[1], chunk[2]])
+//         .collect();
 
-    faces.sort_by(|f1, f2| {
-        let avg_z1 = (verts[f1[0]][2] + verts[f1[1]][2] + verts[f1[2]][2]) / 3.0;
-        let avg_z2 = (verts[f2[0]][2] + verts[f2[1]][2] + verts[f2[2]][2]) / 3.0;
+//     faces.sort_by(|f1, f2| {
+//         let avg_z1 = (verts[f1[0]][2] + verts[f1[1]][2] + verts[f1[2]][2]) / 3.0;
+//         let avg_z2 = (verts[f2[0]][2] + verts[f2[1]][2] + verts[f2[2]][2]) / 3.0;
 
-        avg_z1
-            .partial_cmp(&avg_z2)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+//         avg_z1
+//             .partial_cmp(&avg_z2)
+//             .unwrap_or(std::cmp::Ordering::Equal)
+//     });
 
-    faces
-}
+//     faces
+// }
 
 fn hash_pos(pos: [f32; 3]) -> usize {
     ((pos[0].to_bits() as u64) * 31 + (pos[1].to_bits() as u64) * 7 + (pos[2].to_bits() as u64))
@@ -294,10 +294,10 @@ impl MeshShape {
         }
     }
 
-    pub fn with_name(mut self, name: String) -> Self {
-        self.name = Some(name);
-        self
-    }
+    // pub fn with_name(mut self, name: String) -> Self {
+    //     self.name = Some(name);
+    //     self
+    // }
 }
 
 pub fn round_to(num: impl Into<f64>, places: u32) -> f64 {

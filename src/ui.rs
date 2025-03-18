@@ -4,52 +4,7 @@ use bevy_egui::{
     EguiContexts,
 };
 
-use bevy_vello::vello::kurbo::PathEl;
-use esvg::page::Page;
-use esvg::{create_document, Element};
-
 use crate::{CachedMeshData, Exporter, FrameStepper, PathHighlight};
-
-pub fn export_svg(fs: &FrameStepper, cache: &CachedMeshData) {
-    println!("Export SVG");
-
-    let page = Page::letter(100);
-    let mut doc = create_document(&page);
-    doc.set("viewBox", "-100, -100, 200, 200");
-
-    if let Some(shapes) = &fs.shapes_buffer {
-        for index in &cache.ordering {
-            let mesh = &shapes[*index];
-            // }
-
-            // for (index, mesh) in shapes.iter().enumerate() {
-            let mut group = Element::new("g");
-            group.set("class", format!("Mesh{}", index));
-
-            let mut points = Vec::new();
-
-            for p in &mesh.shape.paths {
-                match p {
-                    PathEl::MoveTo(point) | PathEl::LineTo(point) => {
-                        points.push(polygonical::point::Point::new(point.x, point.y))
-                    }
-                    PathEl::ClosePath => {
-                        let mut path = esvg::path::create_closed(&points);
-                        path.set("fill", mesh.color.to_srgba().to_hex());
-
-                        group.add(&path);
-                        points.clear();
-                    }
-                    _ => panic!("Unsupported pathel"),
-                }
-            }
-
-            doc.add(&group);
-        }
-    }
-
-    esvg::save("image.svg", &doc).unwrap();
-}
 
 pub fn controls_ui(
     exporter: Res<Exporter>,
@@ -67,7 +22,7 @@ pub fn controls_ui(
 
         ui.horizontal(|ui| {
             if ui.button("Export SVG").clicked() {
-                export_svg(&fs, &mesh_data);
+                commands.run_system(exporter.svg);
             }
             if ui.button("Export Lottie").clicked() {
                 commands.run_system(exporter.lottie);
