@@ -1,4 +1,10 @@
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    render::mesh::{
+        morph::{MeshMorphWeights, MorphAttributes},
+        VertexAttributeValues,
+    },
+};
 use bevy_egui::EguiPlugin;
 use bevy_vello::{prelude::*, vello::kurbo::PathEl, VelloPlugin};
 
@@ -135,6 +141,31 @@ fn mesh_ordering(
     }
 }
 
+fn get_transformed_mesh_data(
+    query: Query<(&Handle<Mesh>, &GlobalTransform)>,
+    meshes: Res<Assets<Mesh>>,
+) {
+    for (mesh_handle, global_transform) in query.iter() {
+
+        // if let Some(mesh) = meshes.get(mesh_handle) {
+        //     if let Some(VertexAttributeValues::Float32x3(positions)) =
+        //         mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        //     {
+        //         println!("Original Vertex Positions:");
+        //         for pos in positions.iter().take(5) {
+        //             println!("{:?}", pos);
+        //         }
+
+        //         println!("Transformed Vertex Positions:");
+        //         for pos in positions.iter().take(5) {
+        //             let transformed_pos = global_transform.transform_point(Vec3::from(*pos));
+        //             println!("{:?}", transformed_pos);
+        //         }
+        //     }
+        // }
+    }
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -160,6 +191,7 @@ fn main() {
                 ui::controls_ui,
             ),
         )
+        .add_systems(PostUpdate, (get_transformed_mesh_data,))
         .init_resource::<Exporter>()
         .init_resource::<CachedMeshData>()
         .init_resource::<Animations>()
