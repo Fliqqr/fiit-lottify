@@ -1,6 +1,8 @@
 use bevy::{prelude::*, scene::SceneInstance};
 use bevy_pancam::DirectionKeys;
 
+use crate::PREVIEW_3D;
+
 #[allow(clippy::type_complexity)]
 pub fn camera_setup(
     mut commands: Commands,
@@ -25,7 +27,9 @@ pub fn camera_setup(
                 },
             ));
 
-            commands.entity(entity).remove::<Camera>();
+            if !PREVIEW_3D {
+                commands.entity(entity).remove::<Camera>();
+            }
         }
     };
 }

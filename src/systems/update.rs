@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::tracing};
 use bevy_vello::{
     vello::{
         kurbo::{Affine, Stroke},
@@ -19,7 +19,10 @@ pub fn update(
     projection: Query<&OrthographicProjection>,
     mesh_data: Res<CachedMeshData>,
 ) {
-    let mut scene = scene.get_single_mut().expect("No VelloScene!");
+    let Ok(mut scene) = scene.get_single_mut() else {
+        tracing::error!("No Vello scene!");
+        return;
+    };
     *scene = VelloScene::default();
 
     let shapes = if fs.is_animation_playing {

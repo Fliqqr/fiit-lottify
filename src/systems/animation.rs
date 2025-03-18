@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{animation::AnimationTarget, prelude::*};
 
 use crate::{FrameStepper, FRAME_RATE};
 
@@ -15,9 +15,9 @@ pub struct Animations {
 //     println!("Clips: {}", clips.len());
 //     println!("Getting all animation targets...");
 
-//     for target in targets.iter() {
-//         println!("Target: {:?}", target.id);
-//     }
+//     // for target in targets.iter() {
+//     //     println!("Target: {:?}", target.id);
+//     // }
 
 //     for clip in clips.iter() {
 //         println!("Clip: {:?}", clip.1.duration());

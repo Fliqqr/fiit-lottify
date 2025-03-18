@@ -52,10 +52,12 @@ impl FrameStepper {
 }
 
 // const ASSETS: &str = "./assets";
-const GLB: &str = "Fox.glb";
+const GLB: &str = "Fox_baked.glb";
 
 const FRAME_RATE: u64 = 60;
 const FRAMES: u64 = 180;
+
+const PREVIEW_3D: bool = false;
 
 fn setup(
     mut commands: Commands,
@@ -72,7 +74,9 @@ fn setup(
         GltfScene,
     ));
 
-    commands.spawn(VelloSceneBundle::default());
+    if !PREVIEW_3D {
+        commands.spawn(VelloSceneBundle::default());
+    }
 
     // Insert a placeholder for animations until the GLTF is fully loaded
     commands.insert_resource(PendingAnimations { gltf_handle });
