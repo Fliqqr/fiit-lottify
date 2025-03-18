@@ -8,47 +8,23 @@ use crate::{FrameStepper, FRAME_RATE};
 pub struct Animations {
     pub animations: Vec<AnimationNodeIndex>,
     #[allow(dead_code)]
-    pub graph: Option<Handle<AnimationGraph>>,
+    pub graph: Handle<AnimationGraph>,
 }
 
-pub fn get_animations(targets: Query<&AnimationTarget>, clips: Res<Assets<AnimationClip>>) {
-    println!("Clips: {}", clips.len());
-    println!("Getting all animation targets...");
+// pub fn get_animations(targets: Query<&AnimationTarget>, clips: Res<Assets<AnimationClip>>) {
+//     println!("Clips: {}", clips.len());
+//     println!("Getting all animation targets...");
 
-    for target in targets.iter() {
-        println!("Target: {:?}", target.id);
-    }
+//     for target in targets.iter() {
+//         println!("Target: {:?}", target.id);
+//     }
 
-    for clip in clips.iter() {
-        println!("Clip: {:?}", clip.1.duration());
-    }
-}
+//     for clip in clips.iter() {
+//         println!("Clip: {:?}", clip.1.duration());
+//     }
+// }
 
-pub fn process_gltf_animations(
-    gltf_assets: Res<Assets<Gltf>>,
-    mut graphs: ResMut<Assets<AnimationGraph>>,
-    mut animations: ResMut<Animations>,
-    query: Query<&Handle<Gltf>>,
-) {
-    // println!("Processing animations");
-
-    for handle in query.iter() {
-        println!("Got gltf handle");
-        if let Some(gltf) = gltf_assets.get(handle) {
-            println!("Got gltf!");
-
-            let gltf_animations: Vec<_> = gltf.animations.to_vec();
-
-            let mut graph = AnimationGraph::new();
-            let clips: Vec<_> = graph.add_clips(gltf_animations, 1.0, graph.root).collect();
-            let graph_handle = graphs.add(graph);
-
-            animations.graph = Some(graph_handle);
-            animations.animations = clips;
-        }
-    }
-}
-
+#[allow(unused)]
 pub fn play_animation(
     mut commands: Commands,
     animations: Res<Animations>,
@@ -57,24 +33,19 @@ pub fn play_animation(
     for (entity, mut player) in &mut players {
         let mut transitions = AnimationTransitions::new();
 
-        // Ensure there's an animation to play
-        if animations.animations.is_empty() {
-            continue;
-        }
-
-        // Play the first animation with repeat and pause
+        // Make sure to start the animation via the `AnimationTransitions`
+        // component. The `AnimationTransitions` component wants to manage all
+        // the animations and will get confused if the animations are started
+        // directly via the `AnimationPlayer`.
         transitions
             .play(&mut player, animations.animations[0], Duration::ZERO)
             .repeat()
             .pause();
 
-        // Attach the animation graph if it exists
-        if let Some(graph) = &animations.graph {
-            commands
-                .entity(entity)
-                .insert(graph.clone())
-                .insert(transitions);
-        }
+        commands
+            .entity(entity)
+            .insert(animations.graph.clone())
+            .insert(transitions);
     }
 }
 

@@ -3,10 +3,7 @@ use bevy_egui::EguiPlugin;
 use bevy_vello::{prelude::*, vello::kurbo::PathEl, VelloPlugin};
 
 use export::Exporter;
-use systems::{
-    animation::{process_gltf_animations, Animations},
-    cache::CachedMeshData,
-};
+use systems::{animation::Animations, cache::CachedMeshData};
 
 use vello::AaConfig;
 
@@ -76,34 +73,52 @@ const GLB: &str = "camera3.glb";
 const FRAME_RATE: u64 = 60;
 const FRAMES: u64 = 180;
 
-fn setup(world: &mut World) {
-    println!("Setup");
+fn setup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+) {
+    commands.spawn((
+        SceneBundle {
+            scene: asset_server.load(GltfAssetLabel::Scene(0).from_asset(GLB)),
+            ..default()
+        },
+        GltfScene,
+    ));
 
-    // Load the GLTF file once
-    let gltf_handle: Handle<Gltf> = world.load_asset(GLB);
+    commands.spawn(VelloSceneBundle::default());
 
-    // Store the GLTF handle as a resource so we can access it later
-    world.insert_resource(GltfHandleResource {
-        gltf_handle: gltf_handle.clone(),
+    // Build the animation graph
+    let mut graph = AnimationGraph::new();
+
+    let animations = graph
+        // Get the duration from the animation clip
+        .add_clips(
+            [GltfAssetLabel::Animation(0).from_asset(GLB)]
+                .into_iter()
+                .map(|path| asset_server.load(path)),
+            1.0,
+            graph.root,
+        )
+        .collect();
+
+    // Insert a resource with the current scene information
+    let graph = graphs.add(graph);
+    commands.insert_resource(Animations {
+        animations,
+        graph: graph.clone(),
     });
 
-    // let scene_handle = gltf.scenes[0].clone(); // Get first scene in the GLTF
+    commands.insert_resource(FrameStepper {
+        current_frame: 0,
+        total_frames: FRAMES,
+        last_rendered_frame: 0,
+        is_animation_playing: false,
+        shapes_buffer: None,
+        // highlight: Vec::new(),
+    });
 
-    // Assign the scene to the previously spawned entity
-    // world.commands().spawn((
-    //     SceneBundle {
-    //         scene: gltf_handle,
-    //         ..default()
-    //     },
-    //     GltfScene,
-    // ));
-
-    // Insert placeholder entity for the scene (actual scene handle will be assigned later)
-    world.spawn(GltfScene); // Scene will be assigned in a separate system
-
-    // let handle: Handle<Gltf> = asset_server.load(GLB);
-
-    world.commands().spawn(VelloSceneBundle::default());
+    commands.insert_resource(PathHighlight { paths: Vec::new() });
 }
 
 #[derive(Resource)]
@@ -161,7 +176,6 @@ fn main() {
             (
                 mesh_ordering,
                 assign_scene_handle,
-                process_gltf_animations,
                 systems::camera::camera_setup,
                 systems::cache::cache_mesh_data,
                 systems::cache::cache_mesh_data.after(systems::camera::camera_setup),
