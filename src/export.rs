@@ -38,7 +38,7 @@ pub fn export_lottie(world: &mut World) {
 
         world.run_system_once_with(frame, update_frame);
         world.run_system_once(update_animation);
-        let shapes = world.run_system_once(get_shapes);
+        let shapes = world.run_system_once(get_shapes).unwrap();
 
         // Needed for animation to update
         world.run_schedule(PreUpdate);

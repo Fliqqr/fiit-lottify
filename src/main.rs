@@ -1,14 +1,10 @@
-use bevy::{
-    prelude::*,
-    render::mesh::{
-        morph::{MeshMorphWeights, MorphAttributes},
-        VertexAttributeValues,
-    },
-};
+use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
+use bevy_pancam::DirectionKeys;
 use bevy_vello::{prelude::*, vello::kurbo::PathEl, VelloPlugin};
 
 use export::Exporter;
+use shader::PositionsShader;
 use systems::{animation::Animations, cache::CachedMeshData};
 
 use vello::AaConfig;
@@ -16,6 +12,7 @@ use vello::AaConfig;
 mod draw;
 mod export;
 mod lottie;
+mod shader;
 mod systems;
 mod ui;
 
@@ -73,10 +70,7 @@ fn setup(
     let gltf_handle = asset_server.load(GLB);
 
     commands.spawn((
-        SceneBundle {
-            scene: asset_server.load(GltfAssetLabel::Scene(0).from_asset(GLB)),
-            ..default()
-        },
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset(GLB))),
         GltfScene,
     ));
 
@@ -131,44 +125,30 @@ struct PendingAnimations {
 }
 
 #[allow(clippy::type_complexity)]
-fn mesh_ordering(
-    query: Query<&Handle<Mesh>, (With<Handle<Mesh>>, Added<Handle<Mesh>>)>,
-    mut mesh_data: ResMut<CachedMeshData>,
-) {
+fn mesh_ordering(query: Query<&Mesh3d, Added<Mesh3d>>, mut mesh_data: ResMut<CachedMeshData>) {
     if !query.is_empty() {
         println!("Mesh ordering");
         mesh_data.ordering = query.iter().enumerate().map(|(i, _)| i).collect();
     }
 }
 
-fn get_transformed_mesh_data(
-    query: Query<(&Handle<Mesh>, &GlobalTransform)>,
-    meshes: Res<Assets<Mesh>>,
+fn read_vert_positions(
+    query: Query<(&Mesh3d, &MeshMaterial3d<PositionsShader>)>,
+    materials: ResMut<Assets<PositionsShader>>,
 ) {
-    for (mesh_handle, global_transform) in query.iter() {
+    for (_, material) in query.iter() {
+        let Some(shader) = materials.get(material) else {
+            continue;
+        };
 
-        // if let Some(mesh) = meshes.get(mesh_handle) {
-        //     if let Some(VertexAttributeValues::Float32x3(positions)) =
-        //         mesh.attribute(Mesh::ATTRIBUTE_POSITION)
-        //     {
-        //         println!("Original Vertex Positions:");
-        //         for pos in positions.iter().take(5) {
-        //             println!("{:?}", pos);
-        //         }
-
-        //         println!("Transformed Vertex Positions:");
-        //         for pos in positions.iter().take(5) {
-        //             let transformed_pos = global_transform.transform_point(Vec3::from(*pos));
-        //             println!("{:?}", transformed_pos);
-        //         }
-        //     }
-        // }
+        let lock = shader.positions.lock().unwrap();
+        // println!("Positions: {:?}", *lock);
     }
 }
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins((DefaultPlugins, MaterialPlugin::<PositionsShader>::default()))
         .add_plugins(EguiPlugin)
         .add_plugins(bevy_pancam::PanCamPlugin)
         .add_plugins(VelloPlugin {
@@ -183,15 +163,16 @@ fn main() {
                 load_animations,
                 systems::camera::camera_setup,
                 systems::cache::cache_mesh_data,
-                systems::cache::cache_mesh_data.after(systems::camera::camera_setup),
+                // systems::cache::cache_mesh_data.after(systems::camera::camera_setup),
                 systems::animation::play_animation,
                 systems::animation::keyboard_control,
                 // systems::animation::get_animations,
                 systems::update::update,
                 ui::controls_ui,
+                // read_vert_positions,
             ),
         )
-        .add_systems(PostUpdate, (get_transformed_mesh_data,))
+        .add_observer(shader::change_material)
         .init_resource::<Exporter>()
         .init_resource::<CachedMeshData>()
         .init_resource::<Animations>()

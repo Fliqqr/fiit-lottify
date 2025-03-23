@@ -44,7 +44,7 @@ pub fn play_animation(
 
         commands
             .entity(entity)
-            .insert(animations.graph.clone())
+            .insert(AnimationGraphHandle(animations.graph.clone()))
             .insert(transitions);
     }
 }

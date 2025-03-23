@@ -265,7 +265,7 @@ fn process_face(
     ProcessResult::Ok
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Shape {
     pub paths: Vec<PathEl>,
 }
@@ -276,7 +276,7 @@ impl Shape {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MeshShape {
     pub shape: Shape,
     pub color: Color,
@@ -311,7 +311,7 @@ const SCALE: f32 = 100.0;
 
 fn generate_shape(
     indices: &[usize],
-    positions: &[[f32; 3]],
+    positions: Vec<[f32; 3]>,
     color: Color,
     id: AssetId<Mesh>,
 ) -> Result<MeshShape, Shape> {
@@ -338,7 +338,7 @@ fn generate_shape(
                 continue;
             }
 
-            if process_face(vec![a, b, c], positions, &mut mapping) == ProcessResult::Skip {
+            if process_face(vec![a, b, c], &positions, &mut mapping) == ProcessResult::Skip {
                 skipped_faces.push(*face);
             }
         }
@@ -466,6 +466,40 @@ fn generate_shape(
     Ok(out)
 }
 
+pub fn generate_collection2(
+    ids: Vec<AssetId<Mesh>>,
+    meshes: Vec<Mesh>,
+    colors: Vec<Color>,
+    positions: Vec<Vec<[f32; 4]>>,
+) -> Vec<MeshShape> {
+    println!("Gen2: {:?}", positions);
+
+    let mut out = Vec::new();
+
+    for (((mesh, id), color), positions) in meshes.iter().zip(ids).zip(colors).zip(positions) {
+        // let positions = mesh
+        //     .attribute(Mesh::ATTRIBUTE_POSITION)
+        //     .unwrap()
+        //     .as_float3()
+        //     .expect("`Mesh::ATTRIBUTE_POSITION` vertex attributes should be of type `float3`");
+
+        let mut tmp: Vec<[f32; 3]> = Vec::new();
+
+        for pos in &positions {
+            tmp.push([pos[0], pos[1], pos[2]]);
+        }
+
+        let indices = mesh.indices().unwrap().iter().collect::<Vec<usize>>();
+
+        // Could run these in parallel
+        if let Ok(shapes) = generate_shape(&indices, tmp, color, id) {
+            out.push(shapes);
+        }
+    }
+
+    out
+}
+
 pub fn generate_collection(
     ids: Vec<AssetId<Mesh>>,
     meshes: Vec<Mesh>,
@@ -483,7 +517,7 @@ pub fn generate_collection(
         let indices = mesh.indices().unwrap().iter().collect::<Vec<usize>>();
 
         // Could run these in parallel
-        if let Ok(shapes) = generate_shape(&indices, positions, color, id) {
+        if let Ok(shapes) = generate_shape(&indices, positions.to_vec(), color, id) {
             out.push(shapes);
         }
     }

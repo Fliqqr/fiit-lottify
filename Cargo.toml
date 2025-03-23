@@ -5,10 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-bevy = { version = "0.14", features = ["bevy_animation"] }
-bevy_egui = "0.30.0"
-bevy_vello = "0.6.1"
-bevy_pancam = { version = "0.15.0", features = ["bevy_egui"] }
+bevy = { version = "0.15.3", features = ["bevy_animation"] }
+bevy_egui = "0.33.0"
+bevy_vello = "0.7.0"
+bevy_pancam = { version = "0.17.0", features = ["bevy_egui"] }
 serde_json = { version = "1.0", default-features = false }
 serde = "1.0.217"
 esvg = "0.5.0"
