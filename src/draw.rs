@@ -4,7 +4,7 @@ use std::{
 };
 
 use bevy::prelude::*;
-use bevy_vello::prelude::*;
+use bevy_vello::{prelude::*, vello::kurbo::Point};
 
 use kurbo::PathEl;
 
@@ -472,7 +472,7 @@ pub fn generate_collection2(
     colors: Vec<Color>,
     positions: Vec<Vec<[f32; 4]>>,
 ) -> Vec<MeshShape> {
-    println!("Gen2: {:?}", positions);
+    // println!("Gen2: {:?}", positions);
 
     let mut out = Vec::new();
 
@@ -519,6 +519,36 @@ pub fn generate_collection(
         // Could run these in parallel
         if let Ok(shapes) = generate_shape(&indices, positions.to_vec(), color, id) {
             out.push(shapes);
+        }
+    }
+
+    out
+}
+
+pub fn wireframe(meshes: Vec<Mesh>, positions: Vec<Vec<[f32; 4]>>) -> Vec<Vec<PathEl>> {
+    let mut out = Vec::new();
+
+    // let scale: f32 = 10.0;
+
+    for (mesh, pos) in meshes.iter().zip(positions) {
+        let indices = mesh.indices().unwrap().iter().collect::<Vec<usize>>();
+
+        for t in indices.chunks(3) {
+            out.push(vec![
+                PathEl::MoveTo(Point::new(
+                    (pos[t[0]][0] * SCALE).into(),
+                    (-pos[t[0]][1] * SCALE).into(),
+                )),
+                PathEl::LineTo(Point::new(
+                    (pos[t[1]][0] * SCALE).into(),
+                    (-pos[t[1]][1] * SCALE).into(),
+                )),
+                PathEl::LineTo(Point::new(
+                    (pos[t[2]][0] * SCALE).into(),
+                    (-pos[t[2]][1] * SCALE).into(),
+                )),
+                PathEl::ClosePath,
+            ])
         }
     }
 

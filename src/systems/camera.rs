@@ -32,9 +32,16 @@ pub fn camera_setup(
                 VelloView,
             ));
 
-            // if !PREVIEW_3D {
-            //     commands.entity(entity).remove::<Camera3d>();
-            // }
+            if !PREVIEW_3D {
+                // commands.entity(entity).remove::<Camera3d>();
+                // commands.entity(entity).insert((
+                //     Camera3d::default(),
+                //     Camera {
+                //         is_active: false,
+                //         ..Default::default()
+                //     },
+                // ));
+            }
         }
     };
 }

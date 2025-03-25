@@ -1,9 +1,13 @@
-use bevy::prelude::*;
+use bevy::{
+    app::MainSchedulePlugin,
+    prelude::*,
+    render::{Render, RenderApp, RenderPlugin},
+};
 use bevy_egui::EguiPlugin;
-use bevy_pancam::DirectionKeys;
 use bevy_vello::{prelude::*, vello::kurbo::PathEl, VelloPlugin};
 
 use export::Exporter;
+use export_schedule::SteppingPlugin;
 use shader::PositionsShader;
 use systems::{animation::Animations, cache::CachedMeshData};
 
@@ -11,6 +15,7 @@ use vello::AaConfig;
 
 mod draw;
 mod export;
+mod export_schedule;
 mod lottie;
 mod shader;
 mod systems;
@@ -57,8 +62,8 @@ impl FrameStepper {
 // const ASSETS: &str = "./assets";
 const GLB: &str = "Fox_baked.glb";
 
-const FRAME_RATE: u64 = 60;
-const FRAMES: u64 = 180;
+const FRAME_RATE: u64 = 30;
+const FRAMES: u64 = 30;
 
 const PREVIEW_3D: bool = false;
 
@@ -132,29 +137,20 @@ fn mesh_ordering(query: Query<&Mesh3d, Added<Mesh3d>>, mut mesh_data: ResMut<Cac
     }
 }
 
-fn read_vert_positions(
-    query: Query<(&Mesh3d, &MeshMaterial3d<PositionsShader>)>,
-    materials: ResMut<Assets<PositionsShader>>,
-) {
-    for (_, material) in query.iter() {
-        let Some(shader) = materials.get(material) else {
-            continue;
-        };
-
-        let lock = shader.positions.lock().unwrap();
-        // println!("Positions: {:?}", *lock);
-    }
-}
-
 fn main() {
-    App::new()
-        .add_plugins((DefaultPlugins, MaterialPlugin::<PositionsShader>::default()))
+    let mut app = App::new();
+    app.add_plugins((DefaultPlugins, MaterialPlugin::<PositionsShader>::default()))
         .add_plugins(EguiPlugin)
         .add_plugins(bevy_pancam::PanCamPlugin)
         .add_plugins(VelloPlugin {
             antialiasing: AaConfig::Msaa16,
             ..Default::default()
         })
+        .add_plugins(
+            SteppingPlugin::default()
+                .add_schedule(Main)
+                .add_schedule(Render),
+        )
         .add_systems(Startup, (setup,))
         .add_systems(
             Update,
@@ -169,7 +165,6 @@ fn main() {
                 // systems::animation::get_animations,
                 systems::update::update,
                 ui::controls_ui,
-                // read_vert_positions,
             ),
         )
         .add_observer(shader::change_material)
@@ -183,6 +178,15 @@ fn main() {
             is_animation_playing: false,
             shapes_buffer: None,
         })
-        .insert_resource(PathHighlight { paths: Vec::new() })
-        .run();
+        .insert_resource(PathHighlight { paths: Vec::new() });
+
+    let render_app = app.get_sub_app_mut(RenderApp).expect("No render subapp");
+
+    render_app.add_systems(Render, test);
+
+    app.run();
+}
+
+fn test() {
+    println!("Render");
 }

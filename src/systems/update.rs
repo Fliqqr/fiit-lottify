@@ -1,7 +1,7 @@
 use bevy::{prelude::*, utils::tracing};
 use bevy_vello::{
     vello::{
-        kurbo::{Affine, Rect, Shape, Stroke},
+        kurbo::{Affine, PathEl, Point, Rect, Shape, Stroke},
         peniko,
     },
     VelloScene,
@@ -9,7 +9,7 @@ use bevy_vello::{
 
 use super::cache::CachedMeshData;
 use crate::{
-    draw::{generate_collection, generate_collection2},
+    draw::{generate_collection, generate_collection2, wireframe},
     FrameStepper, PathHighlight,
 };
 
@@ -28,69 +28,57 @@ pub fn update(
     };
     *scene = VelloScene::default();
 
-    // let shapes = if fs.is_animation_playing {
-    //     highlight.paths.clear();
+    let shapes = if fs.is_animation_playing {
+        highlight.paths.clear();
 
-    //     // Generate shapes on every update
-    //     generate_collection2(
-    //         mesh_data.ids.clone(),
-    //         mesh_data.meshes.clone(),
-    //         mesh_data.colors.clone(),
-    //         mesh_data.positions.clone(),
-    //     )
-    // } else if fs.last_rendered_frame != fs.current_frame || fs.shapes_buffer.is_none() {
-    //     highlight.paths.clear();
+        // Generate shapes on every update
+        generate_collection2(
+            mesh_data.ids.clone(),
+            mesh_data.meshes.clone(),
+            mesh_data.colors.clone(),
+            mesh_data.positions.clone(),
+        )
+    // This lags behind the actual frame by 1 for some reason
+    } else if fs.last_rendered_frame != fs.current_frame || fs.shapes_buffer.is_none() {
+        highlight.paths.clear();
 
-    //     let shapes = generate_collection2(
-    //         mesh_data.ids.clone(),
-    //         mesh_data.meshes.clone(),
-    //         mesh_data.colors.clone(),
-    //         mesh_data.positions.clone(),
-    //     );
+        let shapes = generate_collection2(
+            mesh_data.ids.clone(),
+            mesh_data.meshes.clone(),
+            mesh_data.colors.clone(),
+            mesh_data.positions.clone(),
+        );
 
-    //     fs.shapes_buffer = Some(shapes.clone());
-    //     fs.last_rendered_frame = fs.current_frame;
+        fs.shapes_buffer = Some(shapes.clone());
+        fs.last_rendered_frame = fs.current_frame;
 
-    //     shapes
-    // } else {
-    //     fs.shapes_buffer.as_ref().unwrap().clone()
-    // };
+        shapes
+    } else {
+        fs.shapes_buffer.as_ref().unwrap().clone()
+    };
 
     if mesh_data.positions.is_empty() {
-        println!("Empty pos");
+        // println!("Empty pos");
         return;
     }
 
-    let shapes = generate_collection2(
-        mesh_data.ids.clone(),
-        mesh_data.meshes.clone(),
-        mesh_data.colors.clone(),
-        mesh_data.positions.clone(),
-    );
-
-    scene.fill(
-        peniko::Fill::NonZero,
-        Affine::IDENTITY,
-        peniko::Color::from_rgb8(255, 0, 0),
-        None,
-        &Rect {
-            x0: -1000.0,
-            y0: -1000.0,
-            x1: 1000.0,
-            y1: 1000.0,
-        },
-    );
+    // let shapes = generate_collection2(
+    //     mesh_data.ids.clone(),
+    //     mesh_data.meshes.clone(),
+    //     mesh_data.colors.clone(),
+    //     mesh_data.positions.clone(),
+    // );
 
     if shapes.is_empty() {
-        println!("Empty shapes");
         return;
     }
 
     for index in &mesh_data.ordering {
-        let mesh = &shapes[*index];
-        // }
+        if index >= &shapes.len() {
+            break;
+        }
 
-        // println!("drawing: {:?}", shapes);
+        let mesh = &shapes[*index];
 
         // for mesh in shapes {
         let color = mesh.color.to_linear();
@@ -104,6 +92,16 @@ pub fn update(
             &mesh.shape.paths.as_slice(),
         );
     }
+
+    // for path in wireframe(mesh_data.meshes.clone(), mesh_data.positions.clone()) {
+    //     scene.stroke(
+    //         &Stroke::new(1.0),
+    //         Affine::IDENTITY,
+    //         peniko::Color::WHITE,
+    //         None,
+    //         &path.as_slice(),
+    //     );
+    // }
 
     if !highlight.paths.is_empty() {
         // println!("highlight: {:?}", highlight.paths);

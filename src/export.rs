@@ -1,5 +1,10 @@
+use std::{thread::sleep, time::Duration};
+
 use bevy::{
-    ecs::system::{RunSystemOnce, SystemId},
+    ecs::{
+        schedule::Stepping,
+        system::{RunSystemOnce, SystemId},
+    },
     prelude::*,
 };
 use bevy_vello::vello::kurbo::PathEl;
@@ -8,7 +13,7 @@ use esvg::page::Page;
 use esvg::{create_document, Element};
 
 use crate::{
-    draw::{generate_collection, MeshShape},
+    draw::{generate_collection2, MeshShape},
     lottie::Lottie,
     systems::cache::CachedMeshData,
     FrameStepper, FRAMES, FRAME_RATE, GLB,
@@ -32,19 +37,26 @@ impl FromWorld for Exporter {
 pub fn export_lottie(world: &mut World) {
     println!("Exporting lottie...");
     let mut file = Lottie::new(FRAME_RATE);
+    let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
+    stepping.enable();
 
     for frame in 0..FRAMES {
         println!("Frame: {}/{}", frame, FRAMES);
 
-        world.run_system_once_with(frame, update_frame);
-        world.run_system_once(update_animation);
+        let _ = world.run_system_once_with(frame, update_frame);
+        let _ = world.run_system_once(update_animation);
+
         let shapes = world.run_system_once(get_shapes).unwrap();
 
-        // Needed for animation to update
-        world.run_schedule(PreUpdate);
-        world.run_schedule(PostUpdate);
+        // world.run_schedule(PostUpdate);
+        // world.run_schedule(Last);
+        // world.run_schedule(Render);
+        let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
+        stepping.step_frame();
 
         file.add_layer(shapes, &format!("Frame {}", frame), frame, frame + 1);
+
+        sleep(Duration::from_millis(100));
     }
 
     file.save_as(&format!("{}.json", GLB));
@@ -75,10 +87,11 @@ fn update_animation(mut animation_players: Query<&mut AnimationPlayer>, fs: ResM
 #[allow(clippy::type_complexity)]
 fn get_shapes(mesh_data: Res<CachedMeshData>) -> Vec<MeshShape> {
     let mut out = Vec::new();
-    let shapes = generate_collection(
+    let shapes = generate_collection2(
         mesh_data.ids.clone(),
         mesh_data.meshes.clone(),
         mesh_data.colors.clone(),
+        mesh_data.positions.clone(),
     );
     for index in &mesh_data.ordering {
         out.push(shapes[*index].clone());

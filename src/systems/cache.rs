@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::shader::PositionsShader;
+use crate::shader::{PositionsShader, VertexPositions};
 
 #[derive(Resource, Default)]
 pub struct CachedMeshData {
@@ -15,29 +15,22 @@ pub struct CachedMeshData {
 // PS: Caching only makes sense if the scene rotation is static
 #[allow(clippy::complexity)]
 pub fn cache_mesh_data(
-    query: Query<(&GlobalTransform, &Mesh3d, &MeshMaterial3d<PositionsShader>)>,
+    query: Query<(&GlobalTransform, &Mesh3d, &VertexPositions)>,
     meshes: Res<Assets<Mesh>>,
     materials: Res<Assets<PositionsShader>>,
     mut mesh_data: ResMut<CachedMeshData>,
 ) {
-    println!("Caching mesh data...");
+    // println!("Caching mesh data...");
 
     let mut ids = Vec::new();
     let mut t_meshes = Vec::new();
     let mut t_colors = Vec::new();
     let mut positions = Vec::new();
 
-    for (global_transform, mesh_handle, material_handle) in query.iter() {
-        // println!("here");
-        let shader = materials
-            .get(material_handle)
-            .expect("Mesh has no material");
-
-        let lock = shader.positions.lock().unwrap();
-
-        if !(*lock).is_empty() {
-            positions.push((*lock).clone());
-        }
+    for (global_transform, mesh_handle, vert_positions) in query.iter() {
+        let pos = vert_positions.get_positions(&materials);
+        // println!("pos {}: {:?}", pos.len(), pos);
+        positions.push(pos);
 
         if let Some(mesh) = meshes.get(mesh_handle) {
             ids.push(mesh_handle.id());
