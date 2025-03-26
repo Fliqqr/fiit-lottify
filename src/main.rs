@@ -147,9 +147,7 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(
-            SteppingPlugin::default()
-                .add_schedule(Main)
-                .add_schedule(Render),
+            SteppingPlugin::default().add_schedule(Update), // .add_schedule(Render),
         )
         .add_systems(Startup, (setup,))
         .add_systems(

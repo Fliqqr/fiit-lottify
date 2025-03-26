@@ -34,32 +34,34 @@ impl FromWorld for Exporter {
     }
 }
 
-pub fn export_lottie(world: &mut World) {
+pub fn export_lottie(mut stepping: ResMut<Stepping>) {
     println!("Exporting lottie...");
     let mut file = Lottie::new(FRAME_RATE);
-    let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
+    // let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
     stepping.enable();
 
     for frame in 0..FRAMES {
         println!("Frame: {}/{}", frame, FRAMES);
 
-        let _ = world.run_system_once_with(frame, update_frame);
-        let _ = world.run_system_once(update_animation);
+        // let _ = world.run_system_once_with(frame, update_frame);
+        // let _ = world.run_system_once(update_animation);
 
-        let shapes = world.run_system_once(get_shapes).unwrap();
+        // let shapes = world.run_system_once(get_shapes).unwrap();
 
         // world.run_schedule(PostUpdate);
         // world.run_schedule(Last);
         // world.run_schedule(Render);
-        let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
+        // let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
         stepping.step_frame();
 
-        file.add_layer(shapes, &format!("Frame {}", frame), frame, frame + 1);
+        // file.add_layer(shapes, &format!("Frame {}", frame), frame, frame + 1);
 
         sleep(Duration::from_millis(100));
     }
 
-    file.save_as(&format!("{}.json", GLB));
+    stepping.disable();
+
+    // file.save_as(&format!("{}.json", GLB));
 }
 
 fn update_frame(In(frame): In<u64>, mut fs: ResMut<FrameStepper>) {

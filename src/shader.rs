@@ -142,7 +142,7 @@ pub fn change_material(
         move |trigger: Trigger<ReadbackComplete>| {
             let data: Vec<[f32; 4]> = trigger.event().to_shader_type();
             let mut lock = positions.lock().unwrap();
-            println!("buffer len: {}", data.len());
+            // println!("buffer len: {}", data.len());
             // info!("Buffer {:?}", data);
 
             *lock = data;
