@@ -38,7 +38,8 @@ pub fn cache_mesh_data(
             let transformed_mesh = mesh.clone().transformed_by((*global_transform).into());
 
             t_meshes.push(transformed_mesh);
-            t_colors.push(Color::srgb_from_array([1.0, 0.0, 0.0]));
+            // t_colors.push(Color::srgb_from_array([1.0, 0.0, 0.0]));
+            t_colors.push(vert_positions.color);
         }
     }
 

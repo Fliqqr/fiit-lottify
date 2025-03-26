@@ -87,7 +87,7 @@ pub fn update(
             peniko::Fill::NonZero,
             Affine::IDENTITY,
             // peniko::Color::WHITE,
-            peniko::Color::new([color.red, color.blue, color.green, 1.0]),
+            peniko::Color::new([color.red, color.green, color.blue, 1.0]),
             None,
             &mesh.shape.paths.as_slice(),
         );
@@ -106,13 +106,14 @@ pub fn update(
     if !highlight.paths.is_empty() {
         // println!("highlight: {:?}", highlight.paths);
 
-        let scale = projection.single().scale;
+        let scale = projection.single().scale * 2.0;
 
         scene.stroke(
             &Stroke::new(scale as f64),
             Affine::IDENTITY,
-            peniko::Color::BLACK,
-            // peniko::Color::rgb(0.8, 0.85, 1.0),
+            // peniko::Color::BLACK,
+            // peniko::Color::from((0.8, 0.85, 1.0)),
+            peniko::Color::from_rgb8(120, 180, 255),
             None,
             &highlight.paths.as_slice(),
         );

@@ -1,13 +1,8 @@
-use bevy::{
-    app::MainSchedulePlugin,
-    prelude::*,
-    render::{Render, RenderApp, RenderPlugin},
-};
+use bevy::{prelude::*, render::RenderApp};
 use bevy_egui::EguiPlugin;
 use bevy_vello::{prelude::*, vello::kurbo::PathEl, VelloPlugin};
 
 use export::Exporter;
-use export_schedule::SteppingPlugin;
 use shader::PositionsShader;
 use systems::{animation::Animations, cache::CachedMeshData};
 
@@ -15,7 +10,6 @@ use vello::AaConfig;
 
 mod draw;
 mod export;
-mod export_schedule;
 mod lottie;
 mod shader;
 mod systems;
@@ -60,7 +54,7 @@ impl FrameStepper {
 }
 
 // const ASSETS: &str = "./assets";
-const GLB: &str = "Fox_baked.glb";
+const GLB: &str = "camera3.glb";
 
 const FRAME_RATE: u64 = 30;
 const FRAMES: u64 = 30;
@@ -146,9 +140,6 @@ fn main() {
             antialiasing: AaConfig::Msaa16,
             ..Default::default()
         })
-        .add_plugins(
-            SteppingPlugin::default().add_schedule(Update), // .add_schedule(Render),
-        )
         .add_systems(Startup, (setup,))
         .add_systems(
             Update,
@@ -163,6 +154,7 @@ fn main() {
                 // systems::animation::get_animations,
                 systems::update::update,
                 ui::controls_ui,
+                export::export_frame,
             ),
         )
         .add_observer(shader::change_material)
@@ -178,13 +170,5 @@ fn main() {
         })
         .insert_resource(PathHighlight { paths: Vec::new() });
 
-    let render_app = app.get_sub_app_mut(RenderApp).expect("No render subapp");
-
-    render_app.add_systems(Render, test);
-
     app.run();
-}
-
-fn test() {
-    println!("Render");
 }

@@ -35,6 +35,7 @@ pub struct VertexPositions {
     handle: Handle<PositionsShader>,
     offset: usize,
     len: usize,
+    pub color: Color,
 }
 
 impl VertexPositions {
@@ -115,12 +116,13 @@ pub fn change_material(
     mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
     mut materials: ResMut<Assets<PositionsShader>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    query: Query<(Entity, &Mesh3d)>,
+    standard_materials: Res<Assets<StandardMaterial>>,
+    query: Query<(Entity, &Mesh3d, &MeshMaterial3d<StandardMaterial>)>,
 ) {
     let mut total_vertices = 0;
     let mut mesh_offsets = Vec::new();
 
-    for (_, mesh) in query.iter() {
+    for (_, mesh, _) in query.iter() {
         let mesh = meshes.get(mesh).unwrap();
 
         mesh_offsets.push(total_vertices as u32);
@@ -157,11 +159,7 @@ pub fn change_material(
 
     let handle = materials.add(shader);
 
-    for (index, ((entity, mesh_handle), offset)) in query.iter().zip(mesh_offsets).enumerate() {
-        // if index != 2 {
-        //     continue;
-        // }
-
+    for ((entity, mesh_handle, material_handle), offset) in query.iter().zip(mesh_offsets) {
         let mesh = meshes.get(mesh_handle).unwrap();
         let num_vertices = mesh.count_vertices();
 
@@ -183,6 +181,9 @@ pub fn change_material(
             VertexAttributeValues::Uint32(vec![offset; new_mesh.count_vertices()]),
         );
 
+        let original_material = standard_materials.get(material_handle).unwrap();
+        println!("Original color: {:?}", original_material.base_color);
+
         // Insert modified mesh
         commands.entity(entity).insert((
             MeshMaterial3d(handle.clone()),
@@ -190,6 +191,7 @@ pub fn change_material(
                 handle: handle.clone(),
                 offset: offset as usize,
                 len: num_vertices,
+                color: original_material.base_color,
             },
         ));
 

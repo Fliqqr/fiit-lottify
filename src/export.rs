@@ -1,10 +1,5 @@
-use std::{thread::sleep, time::Duration};
-
 use bevy::{
-    ecs::{
-        schedule::Stepping,
-        system::{RunSystemOnce, SystemId},
-    },
+    ecs::system::{RunSystemOnce, SystemId},
     prelude::*,
 };
 use bevy_vello::vello::kurbo::PathEl;
@@ -18,6 +13,13 @@ use crate::{
     systems::cache::CachedMeshData,
     FrameStepper, FRAMES, FRAME_RATE, GLB,
 };
+
+#[derive(Resource)]
+pub struct ExportLottie {
+    file: Lottie,
+    frame: u64,
+    last_frame: u64,
+}
 
 #[derive(Resource)]
 pub struct Exporter {
@@ -34,34 +36,74 @@ impl FromWorld for Exporter {
     }
 }
 
-pub fn export_lottie(mut stepping: ResMut<Stepping>) {
+pub fn export_lottie(mut commands: Commands) {
     println!("Exporting lottie...");
-    let mut file = Lottie::new(FRAME_RATE);
+    let file = Lottie::new(FRAME_RATE);
     // let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
-    stepping.enable();
 
-    for frame in 0..FRAMES {
-        println!("Frame: {}/{}", frame, FRAMES);
+    commands.insert_resource(ExportLottie {
+        file,
+        frame: 0,
+        last_frame: FRAMES,
+    });
 
-        // let _ = world.run_system_once_with(frame, update_frame);
-        // let _ = world.run_system_once(update_animation);
+    // stepping.enable();
 
-        // let shapes = world.run_system_once(get_shapes).unwrap();
+    // for frame in 0..FRAMES {
+    //     println!("Frame: {}/{}", frame, FRAMES);
 
-        // world.run_schedule(PostUpdate);
-        // world.run_schedule(Last);
-        // world.run_schedule(Render);
-        // let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
-        stepping.step_frame();
+    //     // let _ = world.run_system_once_with(frame, update_frame);
+    //     // let _ = world.run_system_once(update_animation);
 
-        // file.add_layer(shapes, &format!("Frame {}", frame), frame, frame + 1);
+    //     // let shapes = world.run_system_once(get_shapes).unwrap();
 
-        sleep(Duration::from_millis(100));
-    }
+    //     // world.run_schedule(PostUpdate);
+    //     // world.run_schedule(Last);
+    //     // world.run_schedule(Render);
+    //     // let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
+    //     stepping.step_frame();
 
-    stepping.disable();
+    //     // file.add_layer(shapes, &format!("Frame {}", frame), frame, frame + 1);
+
+    //     sleep(Duration::from_millis(100));
+    // }
+
+    // stepping.disable();
 
     // file.save_as(&format!("{}.json", GLB));
+}
+
+// Not very good
+pub fn export_frame(
+    mut commands: Commands,
+    export: Option<ResMut<ExportLottie>>,
+    mesh_data: Res<CachedMeshData>,
+    mut fs: ResMut<FrameStepper>,
+    animation_players: Query<&mut AnimationPlayer>,
+) {
+    let Some(mut export) = export else {
+        return;
+    };
+
+    let shapes = get_shapes(mesh_data);
+    let frame = export.frame;
+
+    println!("frame: {}", frame);
+
+    export
+        .file
+        .add_layer(shapes, &format!("Frame {}", frame), frame, frame + 1);
+
+    if frame == export.last_frame {
+        export.file.save_as(&format!("{}.json", GLB));
+        commands.remove_resource::<ExportLottie>();
+        return;
+    }
+
+    export.frame += 1;
+    fs.current_frame = export.frame;
+
+    update_animation(animation_players, fs);
 }
 
 fn update_frame(In(frame): In<u64>, mut fs: ResMut<FrameStepper>) {
