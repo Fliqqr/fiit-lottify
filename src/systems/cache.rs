@@ -29,6 +29,7 @@ pub fn cache_mesh_data(
 
     for (global_transform, mesh_handle, vert_positions) in query.iter() {
         let pos = vert_positions.get_positions(&materials);
+        // println!("pos");
         // println!("pos {}: {:?}", pos.len(), pos);
         positions.push(pos);
 

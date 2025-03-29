@@ -1,6 +1,12 @@
+use std::{thread::sleep, time::Duration};
+
 use bevy::{
-    ecs::system::{RunSystemOnce, SystemId},
+    ecs::{
+        schedule::{ScheduleLabel, Stepping},
+        system::{RunSystemOnce, SystemId},
+    },
     prelude::*,
+    render::Render,
 };
 use bevy_vello::vello::kurbo::PathEl;
 
@@ -10,9 +16,12 @@ use esvg::{create_document, Element};
 use crate::{
     draw::{generate_collection2, MeshShape},
     lottie::Lottie,
-    systems::cache::CachedMeshData,
+    systems::cache::{cache_mesh_data, CachedMeshData},
     FrameStepper, FRAMES, FRAME_RATE, GLB,
 };
+
+#[derive(ScheduleLabel, Eq, PartialEq, Clone, Debug, Hash)]
+pub struct ExportSchedule;
 
 #[derive(Resource)]
 pub struct ExportLottie {
@@ -39,7 +48,6 @@ impl FromWorld for Exporter {
 pub fn export_lottie(mut commands: Commands) {
     println!("Exporting lottie...");
     let file = Lottie::new(FRAME_RATE);
-    // let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
 
     commands.insert_resource(ExportLottie {
         file,
@@ -47,48 +55,42 @@ pub fn export_lottie(mut commands: Commands) {
         last_frame: FRAMES,
     });
 
-    // stepping.enable();
-
-    // for frame in 0..FRAMES {
-    //     println!("Frame: {}/{}", frame, FRAMES);
-
-    //     // let _ = world.run_system_once_with(frame, update_frame);
-    //     // let _ = world.run_system_once(update_animation);
-
-    //     // let shapes = world.run_system_once(get_shapes).unwrap();
-
-    //     // world.run_schedule(PostUpdate);
-    //     // world.run_schedule(Last);
-    //     // world.run_schedule(Render);
-    //     // let mut stepping = world.get_resource_mut::<Stepping>().unwrap();
-    //     stepping.step_frame();
-
-    //     // file.add_layer(shapes, &format!("Frame {}", frame), frame, frame + 1);
-
-    //     sleep(Duration::from_millis(100));
-    // }
-
-    // stepping.disable();
-
-    // file.save_as(&format!("{}.json", GLB));
+    // sleep(Duration::from_secs(1));
 }
 
-// Not very good
-pub fn export_frame(
+pub(crate) fn export_system(
     mut commands: Commands,
     export: Option<ResMut<ExportLottie>>,
-    mesh_data: Res<CachedMeshData>,
-    mut fs: ResMut<FrameStepper>,
     animation_players: Query<&mut AnimationPlayer>,
+    mut fs: ResMut<FrameStepper>,
+    mesh_data: Res<CachedMeshData>,
 ) {
+    // let Some(export) = world.get_resource::<ExportLottie>() else {
+    //     return;
+    // };
+
     let Some(mut export) = export else {
         return;
     };
 
-    let shapes = get_shapes(mesh_data);
+    sleep(Duration::from_secs(1));
+
     let frame = export.frame;
+    fs.current_frame = frame;
+
+    // let _ = world.run_system_once_with(frame, update_frame);
+    // let _ = world.run_system_once(update_animation);
+
+    update_animation(animation_players, fs);
+
+    // let shapes = world.run_system_once(get_shapes).unwrap();
+    let shapes = get_shapes(mesh_data);
 
     println!("frame: {}", frame);
+
+    // let Some(mut export) = world.get_resource_mut::<ExportLottie>() else {
+    //     return;
+    // };
 
     export
         .file
@@ -96,14 +98,13 @@ pub fn export_frame(
 
     if frame == export.last_frame {
         export.file.save_as(&format!("{}.json", GLB));
+        // world.remove_resource::<ExportLottie>();
         commands.remove_resource::<ExportLottie>();
+
         return;
     }
 
     export.frame += 1;
-    fs.current_frame = export.frame;
-
-    update_animation(animation_players, fs);
 }
 
 fn update_frame(In(frame): In<u64>, mut fs: ResMut<FrameStepper>) {
@@ -130,6 +131,9 @@ fn update_animation(mut animation_players: Query<&mut AnimationPlayer>, fs: ResM
 
 #[allow(clippy::type_complexity)]
 fn get_shapes(mesh_data: Res<CachedMeshData>) -> Vec<MeshShape> {
+    // let _ = world.run_system_once(cache_mesh_data);
+    // let mesh_data = world.get_resource::<CachedMeshData>().unwrap();
+
     let mut out = Vec::new();
     let shapes = generate_collection2(
         mesh_data.ids.clone(),
