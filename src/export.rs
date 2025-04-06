@@ -1,12 +1,8 @@
 use std::{thread::sleep, time::Duration};
 
 use bevy::{
-    ecs::{
-        schedule::{ScheduleLabel, Stepping},
-        system::{RunSystemOnce, SystemId},
-    },
+    ecs::{schedule::ScheduleLabel, system::SystemId},
     prelude::*,
-    render::Render,
 };
 use bevy_vello::vello::kurbo::PathEl;
 
@@ -14,9 +10,10 @@ use esvg::page::Page;
 use esvg::{create_document, Element};
 
 use crate::{
-    draw::{generate_collection2, MeshShape},
     lottie::Lottie,
-    systems::cache::{cache_mesh_data, CachedMeshData},
+    shader::{PositionsShader, VertexPositions},
+    systems::cache::{CachedMeshData, LottifyMesh},
+    vectorize::{generate_shapes, models::MeshShape},
     FrameStepper, FRAMES, FRAME_RATE, GLB,
 };
 
@@ -28,6 +25,18 @@ pub struct ExportLottie {
     file: Lottie,
     frame: u64,
     last_frame: u64,
+    exporting: bool,
+}
+
+impl ExportLottie {
+    pub fn new() -> Self {
+        Self {
+            file: Lottie::new(0),
+            frame: 0,
+            last_frame: 0,
+            exporting: false,
+        }
+    }
 }
 
 #[derive(Resource)]
@@ -45,52 +54,73 @@ impl FromWorld for Exporter {
     }
 }
 
-pub fn export_lottie(mut commands: Commands) {
+pub fn export_lottie(mut export: ResMut<ExportLottie>) {
     println!("Exporting lottie...");
     let file = Lottie::new(FRAME_RATE);
 
-    commands.insert_resource(ExportLottie {
-        file,
-        frame: 0,
-        last_frame: FRAMES,
-    });
+    export.file = file;
+    export.frame = 0;
+    export.last_frame = FRAMES;
+    export.exporting = true;
+
+    // commands.insert_resource(ExportLottie {
+    //     file,
+    //     frame: 0,
+    //     last_frame: FRAMES,
+    // });
 
     // sleep(Duration::from_secs(1));
 }
 
 pub(crate) fn export_system(
-    mut commands: Commands,
-    export: Option<ResMut<ExportLottie>>,
     animation_players: Query<&mut AnimationPlayer>,
     mut fs: ResMut<FrameStepper>,
-    mesh_data: Res<CachedMeshData>,
+    mut export: ResMut<ExportLottie>,
+    query: Query<(&GlobalTransform, &Mesh3d, &VertexPositions)>,
+    meshes: Res<Assets<Mesh>>,
+    materials: Res<Assets<PositionsShader>>,
 ) {
-    // let Some(export) = world.get_resource::<ExportLottie>() else {
-    //     return;
-    // };
+    let mut data = Vec::new();
 
-    let Some(mut export) = export else {
+    for (global_transform, mesh_handle, vert_positions) in query.iter() {
+        let pos = vert_positions.get_positions(&materials);
+
+        if let Some(mesh) = meshes.get(mesh_handle) {
+            let transformed_mesh = mesh.clone().transformed_by((*global_transform).into());
+
+            data.push(LottifyMesh::new(
+                mesh_handle.id(),
+                transformed_mesh,
+                vert_positions.color,
+                pos,
+            ));
+        }
+    }
+
+    if data.is_empty() {
+        // println!("No meshes");
         return;
+    }
+
+    let stupid = CachedMeshData {
+        meshes: data,
+        ordering: [0].to_vec(),
     };
+
+    if !export.exporting {
+        return;
+    }
 
     sleep(Duration::from_secs(1));
 
     let frame = export.frame;
     fs.current_frame = frame;
 
-    // let _ = world.run_system_once_with(frame, update_frame);
-    // let _ = world.run_system_once(update_animation);
-
     update_animation(animation_players, fs);
 
-    // let shapes = world.run_system_once(get_shapes).unwrap();
-    let shapes = get_shapes(mesh_data);
+    let shapes = get_shapes(stupid);
 
-    println!("frame: {}", frame);
-
-    // let Some(mut export) = world.get_resource_mut::<ExportLottie>() else {
-    //     return;
-    // };
+    println!("adding layer frame: {}", frame);
 
     export
         .file
@@ -98,22 +128,18 @@ pub(crate) fn export_system(
 
     if frame == export.last_frame {
         export.file.save_as(&format!("{}.json", GLB));
-        // world.remove_resource::<ExportLottie>();
-        commands.remove_resource::<ExportLottie>();
+        export.exporting = false;
 
         return;
     }
 
     export.frame += 1;
-}
-
-fn update_frame(In(frame): In<u64>, mut fs: ResMut<FrameStepper>) {
-    fs.current_frame = frame;
+    println!("--");
 }
 
 // Helper function to set the animation to the current_frame stored in FrameStepper
 fn update_animation(mut animation_players: Query<&mut AnimationPlayer>, fs: ResMut<FrameStepper>) {
-    println!("Update animation");
+    // println!("Update animation");
     for mut player in &mut animation_players {
         let Some((&index, _)) = player.playing_animations().next() else {
             continue;
@@ -124,23 +150,19 @@ fn update_animation(mut animation_players: Query<&mut AnimationPlayer>, fs: ResM
             animation.pause();
         }
 
-        println!("seek: {}", fs.current_frame);
+        // println!("seek: {}", fs.current_frame);
         animation.seek_to(fs.current_frame as f32 / FRAME_RATE as f32);
+        println!("Seek time: {}", animation.seek_time());
     }
 }
 
 #[allow(clippy::type_complexity)]
-fn get_shapes(mesh_data: Res<CachedMeshData>) -> Vec<MeshShape> {
+fn get_shapes(mesh_data: CachedMeshData) -> Vec<MeshShape> {
     // let _ = world.run_system_once(cache_mesh_data);
     // let mesh_data = world.get_resource::<CachedMeshData>().unwrap();
 
     let mut out = Vec::new();
-    let shapes = generate_collection2(
-        mesh_data.ids.clone(),
-        mesh_data.meshes.clone(),
-        mesh_data.colors.clone(),
-        mesh_data.positions.clone(),
-    );
+    let shapes = generate_shapes(&mesh_data);
     for index in &mesh_data.ordering {
         out.push(shapes[*index].clone());
     }

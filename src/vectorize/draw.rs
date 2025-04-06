@@ -4,32 +4,21 @@ use std::{
 };
 
 use bevy::prelude::*;
-use bevy_vello::{prelude::*, vello::kurbo::Point};
+use bevy_vello::prelude::*;
 
 use kurbo::PathEl;
+
+use super::{
+    models::{MeshShape, Shape},
+    round_to,
+};
+
+const SCALE: f32 = 100.0;
 
 fn face_normal(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> [f32; 3] {
     let (a, b, c) = (Vec3::from(a), Vec3::from(b), Vec3::from(c));
     (b - a).cross(c - a).normalize().into()
 }
-
-// fn sort_faces(indices: &[usize], verts: &[[f32; 3]]) -> Vec<[usize; 3]> {
-//     let mut faces: Vec<[usize; 3]> = indices
-//         .chunks_exact(3)
-//         .map(|chunk| [chunk[0], chunk[1], chunk[2]])
-//         .collect();
-
-//     faces.sort_by(|f1, f2| {
-//         let avg_z1 = (verts[f1[0]][2] + verts[f1[1]][2] + verts[f1[2]][2]) / 3.0;
-//         let avg_z2 = (verts[f2[0]][2] + verts[f2[1]][2] + verts[f2[2]][2]) / 3.0;
-
-//         avg_z1
-//             .partial_cmp(&avg_z2)
-//             .unwrap_or(std::cmp::Ordering::Equal)
-//     });
-
-//     faces
-// }
 
 fn hash_pos(pos: [f32; 3]) -> usize {
     ((pos[0].to_bits() as u64) * 31 + (pos[1].to_bits() as u64) * 7 + (pos[2].to_bits() as u64))
@@ -82,13 +71,6 @@ impl Path {
     // Merges two paths into one
     pub fn merge(mut self, other: Path) -> Self {
         self.edges = self.symmetric_difference(&other);
-
-        // if !self.edges.is_empty() && self.edges.len() != 2 {
-        //     panic!(
-        //         "Path has incompatible number of edges: {}",
-        //         self.edges.len()
-        //     );
-        // }
 
         self
     }
@@ -153,10 +135,12 @@ impl Vertex {
     pub fn new(paths: Vec<Path>, position: [f32; 2]) -> Self {
         Self { paths, position }
     }
+}
 
-    // pub fn add_path(&mut self, path: Path) {
-    //     self.paths.push(path);
-    // }
+#[derive(PartialEq)]
+enum ProcessResult {
+    Ok,
+    Skip,
 }
 
 // Made by ChatGPT, take with a grain of salt
@@ -172,12 +156,6 @@ fn calc_rotation(ax1: [f32; 3], ax2: [f32; 3], side: [f32; 3]) -> bool {
 
     // Return true if the side is on the left (positive cross product), false otherwise
     cross > 0.0
-}
-
-#[derive(PartialEq)]
-enum ProcessResult {
-    Ok,
-    Skip,
 }
 
 fn process_face(
@@ -265,51 +243,7 @@ fn process_face(
     ProcessResult::Ok
 }
 
-#[derive(Clone, Debug)]
-pub struct Shape {
-    pub paths: Vec<PathEl>,
-}
-
-impl Shape {
-    pub fn new(paths: Vec<PathEl>) -> Self {
-        Self { paths }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct MeshShape {
-    pub shape: Shape,
-    pub color: Color,
-    pub mesh_id: AssetId<Mesh>,
-    pub name: Option<String>,
-}
-
-impl MeshShape {
-    pub fn new(shape: Shape, color: Color, id: AssetId<Mesh>) -> Self {
-        Self {
-            shape,
-            color,
-            mesh_id: id,
-            name: None,
-        }
-    }
-
-    // pub fn with_name(mut self, name: String) -> Self {
-    //     self.name = Some(name);
-    //     self
-    // }
-}
-
-pub fn round_to(num: impl Into<f64>, places: u32) -> f64 {
-    let num = num.into();
-    let pow = 10_f64.powf(places as f64);
-
-    (num * pow).round() / pow
-}
-
-const SCALE: f32 = 100.0;
-
-fn generate_shape(
+pub fn generate_shape(
     indices: &[usize],
     positions: Vec<[f32; 3]>,
     color: Color,
@@ -464,93 +398,4 @@ fn generate_shape(
     let out = MeshShape::new(Shape::new(tmp), color, id);
 
     Ok(out)
-}
-
-pub fn generate_collection2(
-    ids: Vec<AssetId<Mesh>>,
-    meshes: Vec<Mesh>,
-    colors: Vec<Color>,
-    positions: Vec<Vec<[f32; 4]>>,
-) -> Vec<MeshShape> {
-    // println!("Gen2: {:?}", positions);
-
-    let mut out = Vec::new();
-
-    for (((mesh, id), color), positions) in meshes.iter().zip(ids).zip(colors).zip(positions) {
-        // let positions = mesh
-        //     .attribute(Mesh::ATTRIBUTE_POSITION)
-        //     .unwrap()
-        //     .as_float3()
-        //     .expect("`Mesh::ATTRIBUTE_POSITION` vertex attributes should be of type `float3`");
-
-        let mut tmp: Vec<[f32; 3]> = Vec::new();
-
-        for pos in &positions {
-            tmp.push([pos[0], pos[1], pos[2]]);
-        }
-
-        let indices = mesh.indices().unwrap().iter().collect::<Vec<usize>>();
-
-        // Could run these in parallel
-        if let Ok(shapes) = generate_shape(&indices, tmp, color, id) {
-            out.push(shapes);
-        }
-    }
-
-    out
-}
-
-pub fn generate_collection(
-    ids: Vec<AssetId<Mesh>>,
-    meshes: Vec<Mesh>,
-    colors: Vec<Color>,
-) -> Vec<MeshShape> {
-    let mut out = Vec::new();
-
-    for ((mesh, id), color) in meshes.iter().zip(ids).zip(colors) {
-        let positions = mesh
-            .attribute(Mesh::ATTRIBUTE_POSITION)
-            .unwrap()
-            .as_float3()
-            .expect("`Mesh::ATTRIBUTE_POSITION` vertex attributes should be of type `float3`");
-
-        let indices = mesh.indices().unwrap().iter().collect::<Vec<usize>>();
-
-        // Could run these in parallel
-        if let Ok(shapes) = generate_shape(&indices, positions.to_vec(), color, id) {
-            out.push(shapes);
-        }
-    }
-
-    out
-}
-
-pub fn wireframe(meshes: Vec<Mesh>, positions: Vec<Vec<[f32; 4]>>) -> Vec<Vec<PathEl>> {
-    let mut out = Vec::new();
-
-    // let scale: f32 = 10.0;
-
-    for (mesh, pos) in meshes.iter().zip(positions) {
-        let indices = mesh.indices().unwrap().iter().collect::<Vec<usize>>();
-
-        for t in indices.chunks(3) {
-            out.push(vec![
-                PathEl::MoveTo(Point::new(
-                    (pos[t[0]][0] * SCALE).into(),
-                    (-pos[t[0]][1] * SCALE).into(),
-                )),
-                PathEl::LineTo(Point::new(
-                    (pos[t[1]][0] * SCALE).into(),
-                    (-pos[t[1]][1] * SCALE).into(),
-                )),
-                PathEl::LineTo(Point::new(
-                    (pos[t[2]][0] * SCALE).into(),
-                    (-pos[t[2]][1] * SCALE).into(),
-                )),
-                PathEl::ClosePath,
-            ])
-        }
-    }
-
-    out
 }

@@ -1,25 +1,20 @@
-use bevy::{
-    app::MainScheduleOrder,
-    prelude::*,
-    render::{Render, RenderApp},
-};
+use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 use bevy_vello::{prelude::*, vello::kurbo::PathEl, VelloPlugin};
 
-use export::{ExportSchedule, Exporter};
+use export::{ExportLottie, Exporter};
 use shader::PositionsShader;
 use systems::{animation::Animations, cache::CachedMeshData};
 
+use vectorize::models::MeshShape;
 use vello::AaConfig;
 
-mod draw;
 mod export;
 mod lottie;
 mod shader;
 mod systems;
 mod ui;
-
-use draw::MeshShape;
+mod vectorize;
 
 /*
 https://github.com/zimond/lottie-rs/
@@ -152,15 +147,16 @@ fn main() {
                 load_animations,
                 systems::camera::camera_setup,
                 systems::cache::cache_mesh_data,
-                // systems::cache::cache_mesh_data.after(systems::camera::camera_setup),
+                systems::cache::cache_mesh_data.after(systems::camera::camera_setup),
                 systems::animation::play_animation,
                 systems::animation::keyboard_control,
                 // systems::animation::get_animations,
                 systems::update::update,
                 ui::controls_ui,
+                // test2,
             ),
         )
-        .add_systems(Update, export::export_system)
+        .add_systems(Last, export::export_system)
         .add_observer(shader::change_material)
         .init_resource::<Exporter>()
         .init_resource::<CachedMeshData>()
@@ -172,18 +168,8 @@ fn main() {
             is_animation_playing: false,
             shapes_buffer: None,
         })
+        .insert_resource(ExportLottie::new())
         .insert_resource(PathHighlight { paths: Vec::new() });
-
-    let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
-        panic!("Couldn't get render app");
-    };
-
-    // render_app.init_schedule(ExportSchedule);
-
-    // let mut order = render_app.world_mut().resource_mut::<MainScheduleOrder>();
-    // order.insert_after(Render, ExportSchedule);
-
-    // render_app.add_systems(Render, export::export_system);
 
     app.run();
 }

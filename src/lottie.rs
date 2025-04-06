@@ -2,7 +2,7 @@ use std::{fs::File, io::Write};
 
 use serde_json::{self, Value};
 
-use crate::draw::{round_to, MeshShape};
+use crate::vectorize::{models::MeshShape, round_to};
 
 pub fn base_lottie(framerate: u64, frames: u64) -> Value {
     serde_json::from_str::<Value>(&format!(

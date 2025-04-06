@@ -10,7 +10,7 @@ pub fn camera_setup(
     cam_query: Query<(Entity, &Camera, &GlobalTransform), (With<Camera3d>, Added<Camera3d>)>,
     mut scene_transform: Query<&mut Transform, (With<SceneInstance>, Without<Camera3d>)>,
 ) {
-    if let Ok((entity, _camera, cam_transform)) = cam_query.get_single() {
+    if let Ok((_entity, _camera, cam_transform)) = cam_query.get_single() {
         if let Ok(mut scene_trans) = scene_transform.get_single_mut() {
             println!("Camera setup");
 

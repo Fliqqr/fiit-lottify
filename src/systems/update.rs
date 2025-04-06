@@ -1,17 +1,14 @@
 use bevy::{prelude::*, utils::tracing};
 use bevy_vello::{
     vello::{
-        kurbo::{Affine, PathEl, Point, Rect, Shape, Stroke},
+        kurbo::{Affine, Stroke},
         peniko,
     },
     VelloScene,
 };
 
 use super::cache::CachedMeshData;
-use crate::{
-    draw::{generate_collection, generate_collection2, wireframe},
-    FrameStepper, PathHighlight,
-};
+use crate::{vectorize::generate_shapes, FrameStepper, PathHighlight};
 
 #[allow(clippy::type_complexity)]
 #[allow(clippy::too_many_arguments)]
@@ -32,22 +29,12 @@ pub fn update(
         highlight.paths.clear();
 
         // Generate shapes on every update
-        generate_collection2(
-            mesh_data.ids.clone(),
-            mesh_data.meshes.clone(),
-            mesh_data.colors.clone(),
-            mesh_data.positions.clone(),
-        )
+        generate_shapes(&mesh_data)
     // This lags behind the actual frame by 1 for some reason
     } else if fs.last_rendered_frame != fs.current_frame || fs.shapes_buffer.is_none() {
         highlight.paths.clear();
 
-        let shapes = generate_collection2(
-            mesh_data.ids.clone(),
-            mesh_data.meshes.clone(),
-            mesh_data.colors.clone(),
-            mesh_data.positions.clone(),
-        );
+        let shapes = generate_shapes(&mesh_data);
 
         fs.shapes_buffer = Some(shapes.clone());
         fs.last_rendered_frame = fs.current_frame;
@@ -56,18 +43,6 @@ pub fn update(
     } else {
         fs.shapes_buffer.as_ref().unwrap().clone()
     };
-
-    if mesh_data.positions.is_empty() {
-        // println!("Empty pos");
-        return;
-    }
-
-    // let shapes = generate_collection2(
-    //     mesh_data.ids.clone(),
-    //     mesh_data.meshes.clone(),
-    //     mesh_data.colors.clone(),
-    //     mesh_data.positions.clone(),
-    // );
 
     if shapes.is_empty() {
         return;
@@ -92,16 +67,6 @@ pub fn update(
             &mesh.shape.paths.as_slice(),
         );
     }
-
-    // for path in wireframe(mesh_data.meshes.clone(), mesh_data.positions.clone()) {
-    //     scene.stroke(
-    //         &Stroke::new(1.0),
-    //         Affine::IDENTITY,
-    //         peniko::Color::WHITE,
-    //         None,
-    //         &path.as_slice(),
-    //     );
-    // }
 
     if !highlight.paths.is_empty() {
         // println!("highlight: {:?}", highlight.paths);

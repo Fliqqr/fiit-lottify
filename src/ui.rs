@@ -25,10 +25,13 @@ pub fn controls_ui(
                 commands.run_system(exporter.svg);
             }
             if ui.button("Export Lottie").clicked() {
+                println!("UI Export Lottie");
                 commands.run_system(exporter.lottie);
             }
         });
     });
+
+    return;
 
     let shape_layers = egui::SidePanel::new(egui::panel::Side::Left, "Layers").resizable(true);
 
