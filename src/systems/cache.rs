@@ -10,6 +10,12 @@ pub struct LottifyMesh {
     pub positions: Vec<[f32; 4]>,
 }
 
+impl PartialEq for LottifyMesh {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.color == other.color && self.positions == other.positions
+    }
+}
+
 impl LottifyMesh {
     pub fn new(id: AssetId<Mesh>, mesh: Mesh, color: Color, positions: Vec<[f32; 4]>) -> Self {
         Self {
@@ -21,7 +27,7 @@ impl LottifyMesh {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, PartialEq, Clone)]
 pub struct CachedMeshData {
     pub meshes: Vec<LottifyMesh>,
     pub ordering: Vec<usize>,
@@ -60,5 +66,5 @@ pub fn cache_mesh_data(
     }
 
     mesh_data.meshes = data;
-    println!("Cached");
+    // println!("Cached");
 }

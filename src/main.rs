@@ -24,7 +24,7 @@ https://lottie.github.io/lottie-spec/1.0/single-page/
 #[derive(Component)]
 struct GltfScene;
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 struct FrameStepper {
     current_frame: u64,
     total_frames: u64,
@@ -56,7 +56,8 @@ impl FrameStepper {
 const GLB: &str = "Fox_baked.glb";
 
 const FRAME_RATE: u64 = 30;
-const FRAMES: u64 = 30;
+// This should be calculated based off the clip duration
+const FRAMES: u64 = 34;
 
 const PREVIEW_3D: bool = false;
 
@@ -154,9 +155,9 @@ fn main() {
                 systems::update::update,
                 ui::controls_ui,
                 // test2,
+                export::export_system,
             ),
         )
-        .add_systems(Last, export::export_system)
         .add_observer(shader::change_material)
         .init_resource::<Exporter>()
         .init_resource::<CachedMeshData>()
@@ -164,7 +165,7 @@ fn main() {
         .insert_resource(FrameStepper {
             current_frame: 0,
             total_frames: FRAMES,
-            last_rendered_frame: 0,
+            last_rendered_frame: u64::MAX,
             is_animation_playing: false,
             shapes_buffer: None,
         })

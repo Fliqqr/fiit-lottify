@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_vello::vello::kurbo::PathEl;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Shape {
     pub paths: Vec<PathEl>,
 }
@@ -12,7 +12,7 @@ impl Shape {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MeshShape {
     pub shape: Shape,
     pub color: Color,

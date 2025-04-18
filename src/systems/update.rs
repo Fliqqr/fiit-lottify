@@ -8,7 +8,9 @@ use bevy_vello::{
 };
 
 use super::cache::CachedMeshData;
-use crate::{vectorize::generate_shapes, FrameStepper, PathHighlight};
+use crate::{
+    export::ExportLottie, vectorize::generate_shapes, FrameStepper, PathHighlight, FRAMES,
+};
 
 #[allow(clippy::type_complexity)]
 #[allow(clippy::too_many_arguments)]
@@ -18,6 +20,7 @@ pub fn update(
     mut highlight: ResMut<PathHighlight>,
     projection: Query<&OrthographicProjection>,
     mesh_data: Res<CachedMeshData>,
+    mut export: ResMut<ExportLottie>,
 ) {
     let Ok(mut scene) = scene.get_single_mut() else {
         tracing::error!("No Vello scene!");
@@ -31,7 +34,7 @@ pub fn update(
         // Generate shapes on every update
         generate_shapes(&mesh_data)
     // This lags behind the actual frame by 1 for some reason
-    } else if fs.last_rendered_frame != fs.current_frame || fs.shapes_buffer.is_none() {
+    } else {
         highlight.paths.clear();
 
         let shapes = generate_shapes(&mesh_data);
@@ -39,9 +42,19 @@ pub fn update(
         fs.shapes_buffer = Some(shapes.clone());
         fs.last_rendered_frame = fs.current_frame;
 
+        if fs.current_frame < FRAMES {
+            if shapes.is_empty() {
+                return;
+            }
+            // println!(
+            //     "Frame {}: {}",
+            //     fs.current_frame,
+            //     shapes[0].shape.paths.len()
+            // );
+            export.shape_frames[fs.current_frame as usize] = shapes.clone();
+        }
+
         shapes
-    } else {
-        fs.shapes_buffer.as_ref().unwrap().clone()
     };
 
     if shapes.is_empty() {
