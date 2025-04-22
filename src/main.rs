@@ -28,7 +28,7 @@ struct GltfScene;
 struct FrameStepper {
     current_frame: u64,
     total_frames: u64,
-    last_rendered_frame: u64,
+    updated: bool,
     is_animation_playing: bool,
     shapes_buffer: Option<Vec<MeshShape>>,
 }
@@ -41,25 +41,26 @@ struct PathHighlight {
 impl FrameStepper {
     fn back(&mut self) {
         if self.current_frame > 0 {
+            self.updated = true;
             self.current_frame -= 1;
         }
     }
 
     fn forward(&mut self) {
         if self.current_frame < self.total_frames {
+            self.updated = true;
             self.current_frame += 1;
         }
     }
 }
 
 // const ASSETS: &str = "./assets";
-const GLB: &str = "Fox_baked.glb";
+// const GLB: &str = "Fox_baked.glb";
+const GLB: &str = "camera3.glb";
 
 const FRAME_RATE: u64 = 30;
 // This should be calculated based off the clip duration
 const FRAMES: u64 = 34;
-
-const PREVIEW_3D: bool = false;
 
 fn setup(
     mut commands: Commands,
@@ -73,9 +74,7 @@ fn setup(
         GltfScene,
     ));
 
-    if !PREVIEW_3D {
-        commands.spawn(VelloSceneBundle::default());
-    }
+    commands.spawn(VelloSceneBundle::default());
 
     // Insert a placeholder for animations until the GLTF is fully loaded
     commands.insert_resource(PendingAnimations { gltf_handle });
@@ -165,7 +164,7 @@ fn main() {
         .insert_resource(FrameStepper {
             current_frame: 0,
             total_frames: FRAMES,
-            last_rendered_frame: u64::MAX,
+            updated: true,
             is_animation_playing: false,
             shapes_buffer: None,
         })

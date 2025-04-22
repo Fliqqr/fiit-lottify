@@ -4,7 +4,13 @@
     skinning,
     // forward_io::{VertexOutput},
     view_transformations::position_world_to_clip,
+    view_transformations::position_clip_to_view,
+    view_transformations::position_world_to_ndc,
+    view_transformations::position_ndc_to_view,
+    view_transformations::ndc_to_frag_coord,
+    pbr_functions::calculate_view,
 }
+#import bevy_pbr::mesh_view_bindings as view_bindings
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
@@ -157,7 +163,17 @@ fn vertex(vertex_no_morph: Vertex) -> VertexOutput {
     let first_vertex = mesh[vertex_no_morph.instance_index].first_vertex_index;
     let vertex_index = vertex_no_morph.index - first_vertex;
 
-    positions[vertex.mesh_offset + vertex_index] = out.world_position;
+    // positions[vertex.mesh_offset + vertex_index] = vec4<f32>(position_clip_to_view(out.position), 1.0);
+    let ndc = position_world_to_ndc(out.world_position.xyz);
+
+    positions[vertex.mesh_offset + vertex_index] = vec4<f32>(
+        // ndc_to_frag_coord(vec2<f32>(ndc.x, -ndc.y)),
+        vec2<f32>(ndc.x * 0.5, ndc.y * 0.5) * view_bindings::view.viewport.zw,
+        out.world_position.z,
+        1.0
+    );
+    // positions[vertex.mesh_offset + vertex_index] = vec4<f32>(calculate_view(out.world_position, false), 1.0);
+    
 
     return out;
 }

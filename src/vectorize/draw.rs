@@ -13,7 +13,7 @@ use super::{
     round_to,
 };
 
-const SCALE: f32 = 100.0;
+const SCALE: f32 = 1.0;
 
 fn face_normal(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> [f32; 3] {
     let (a, b, c) = (Vec3::from(a), Vec3::from(b), Vec3::from(c));

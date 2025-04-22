@@ -34,6 +34,7 @@ impl ExportLottie {
             last_mesh_data: CachedMeshData {
                 meshes: Vec::new(),
                 ordering: Vec::new(),
+                gpu_update: false,
             },
             exporting: false,
             shape_frames: [const { Vec::new() }; FRAMES as usize],
@@ -62,25 +63,10 @@ fn export_lottie(mut export: ResMut<ExportLottie>, mut fs: ResMut<FrameStepper>)
     export.last_mesh_data = CachedMeshData {
         meshes: Vec::new(),
         ordering: Vec::new(),
+        gpu_update: false,
     };
     export.frame = 0;
     fs.current_frame = 0;
-    // let mut file = Lottie::new(FRAME_RATE);
-
-    // for (index, shapes) in export.shape_frames.iter().enumerate() {
-    //     file.add_layer(
-    //         shapes.clone(),
-    //         &format!("frame{}", index),
-    //         index as u64,
-    //         (index + 1) as u64,
-    //     );
-    // }
-
-    // file.save_as(&format!("{}.json", GLB));
-
-    // 1. Save the current frame if it differs from the last
-
-    //
 }
 
 pub fn export_system(
@@ -137,19 +123,6 @@ fn update_animation(mut animation_players: Query<&mut AnimationPlayer>, fs: &Res
     }
 }
 
-#[allow(clippy::type_complexity)]
-fn get_shapes(mesh_data: CachedMeshData) -> Vec<MeshShape> {
-    // let _ = world.run_system_once(cache_mesh_data);
-    // let mesh_data = world.get_resource::<CachedMeshData>().unwrap();
-
-    let mut out = Vec::new();
-    let shapes = generate_shapes(&mesh_data);
-    for index in &mesh_data.ordering {
-        out.push(shapes[*index].clone());
-    }
-    out
-}
-
 pub fn export_svg(world: &mut World) {
     let fs = world.get_resource::<FrameStepper>().unwrap();
     let cache = world.get_resource::<CachedMeshData>().unwrap();
@@ -158,7 +131,7 @@ pub fn export_svg(world: &mut World) {
 
     let page = Page::letter(100);
     let mut doc = create_document(&page);
-    doc.set("viewBox", "-100, -100, 200, 200");
+    doc.set("viewBox", "-500, -500, 1000, 1000");
 
     if let Some(shapes) = &fs.shapes_buffer {
         for index in &cache.ordering {

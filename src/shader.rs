@@ -45,6 +45,19 @@ impl VertexPositions {
 
         (*lock)[self.offset..(self.offset + self.len)].to_vec()
     }
+
+    // Checks if the positions data changed since the last poll
+    pub fn poll_update(&self, materials: &Res<Assets<PositionsShader>>) -> bool {
+        let shader = materials.get(&self.handle).unwrap();
+        let mut lock = shader.updated.lock().unwrap();
+
+        if *lock {
+            *lock = false;
+            return true;
+        }
+
+        false
+    }
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -54,6 +67,7 @@ pub struct PositionsShader {
     #[storage(1, read_only)]
     mesh_offsets: Handle<ShaderStorageBuffer>,
     pub positions: Arc<Mutex<Vec<[f32; 4]>>>,
+    pub updated: Arc<Mutex<bool>>,
 }
 
 impl Material for PositionsShader {
@@ -137,9 +151,11 @@ pub fn change_material(
 
     let buffer = buffers.add(buffer);
     let positions = Arc::new(Mutex::new(vec![[f32::default(); 4]; total_vertices]));
+    let updated = Arc::new(Mutex::new(false));
 
     commands.spawn(Readback::buffer(buffer.clone())).observe({
         let positions = positions.clone();
+        let updated = updated.clone();
 
         move |trigger: Trigger<ReadbackComplete>| {
             // println!("readback complete");
@@ -150,9 +166,10 @@ pub fn change_material(
                 // println!("buffer len: {}", data.len());
                 // info!("Buffer {:?}", data);
 
-                // if *lock == data {
-                //     println!("Same buffer");
-                // }
+                if *lock != data {
+                    let mut updated = updated.lock().unwrap();
+                    *updated = true;
+                }
 
                 *lock = data;
             }
@@ -163,6 +180,7 @@ pub fn change_material(
         buffer,
         mesh_offsets: buffers.add(ShaderStorageBuffer::from(mesh_offsets.clone())),
         positions,
+        updated,
     };
 
     let handle = materials.add(shader);

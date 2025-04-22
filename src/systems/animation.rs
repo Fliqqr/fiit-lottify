@@ -97,6 +97,7 @@ pub fn keyboard_control(
         }
 
         if playing_animation.is_paused() {
+            // println!("seek: {}", fs.current_frame as f32 / FRAME_RATE as f32);
             playing_animation.seek_to(fs.current_frame as f32 / FRAME_RATE as f32);
         }
     }

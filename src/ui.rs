@@ -31,8 +31,6 @@ pub fn controls_ui(
         });
     });
 
-    return;
-
     let shape_layers = egui::SidePanel::new(egui::panel::Side::Left, "Layers").resizable(true);
 
     shape_layers.show(contexts.ctx_mut(), |ui| {

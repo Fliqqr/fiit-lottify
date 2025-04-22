@@ -31,6 +31,17 @@ impl LottifyMesh {
 pub struct CachedMeshData {
     pub meshes: Vec<LottifyMesh>,
     pub ordering: Vec<usize>,
+    pub gpu_update: bool,
+}
+
+impl CachedMeshData {
+    pub fn poll_update(&mut self) -> bool {
+        if self.gpu_update {
+            self.gpu_update = false;
+            return true;
+        }
+        false
+    }
 }
 
 // TODO: This only needs to run every time the frame changes
@@ -47,6 +58,10 @@ pub fn cache_mesh_data(
 
     for (global_transform, mesh_handle, vert_positions) in query.iter() {
         let pos = vert_positions.get_positions(&materials);
+
+        if vert_positions.poll_update(&materials) {
+            mesh_data.gpu_update = true;
+        }
 
         if let Some(mesh) = meshes.get(mesh_handle) {
             let transformed_mesh = mesh.clone().transformed_by((*global_transform).into());

@@ -19,7 +19,7 @@ pub fn update(
     mut fs: ResMut<FrameStepper>,
     mut highlight: ResMut<PathHighlight>,
     projection: Query<&OrthographicProjection>,
-    mesh_data: Res<CachedMeshData>,
+    mut mesh_data: ResMut<CachedMeshData>,
     mut export: ResMut<ExportLottie>,
 ) {
     let Ok(mut scene) = scene.get_single_mut() else {
@@ -34,27 +34,26 @@ pub fn update(
         // Generate shapes on every update
         generate_shapes(&mesh_data)
     // This lags behind the actual frame by 1 for some reason
-    } else {
+    } else if mesh_data.poll_update() || fs.shapes_buffer.is_none() {
         highlight.paths.clear();
 
         let shapes = generate_shapes(&mesh_data);
 
         fs.shapes_buffer = Some(shapes.clone());
-        fs.last_rendered_frame = fs.current_frame;
 
         if fs.current_frame < FRAMES {
             if shapes.is_empty() {
                 return;
             }
-            // println!(
-            //     "Frame {}: {}",
-            //     fs.current_frame,
-            //     shapes[0].shape.paths.len()
-            // );
             export.shape_frames[fs.current_frame as usize] = shapes.clone();
         }
 
+        fs.updated = false;
+
         shapes
+    } else {
+        // println!("YEP");
+        fs.shapes_buffer.as_ref().unwrap().clone()
     };
 
     if shapes.is_empty() {
