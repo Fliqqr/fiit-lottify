@@ -2,6 +2,8 @@
 
 Filip Ďuriš
 
+Docs [here](./docs_draft.pdf)
+
 ## Introduction
 
 Lottify is a tool for generating optimized SVGs and [Lottie files](<https://en.wikipedia.org/wiki/Lottie_(file_format)>) from glTF models. Lottify aims to decrease the difficulty of creating Lotties animations. The currently available tooling is very basic, the most popular being [LottieLab](https://www.lottielab.com/dashboard) and [LottieFiles](https://lottiefiles.com), neither providing any advanced tooling and mostly just rely on simple vector graphics manipulation and interpolation. Adobe recently announced their project called [Turntable](https://www.adobe.com/max/2024/sessions/project-turntable-gs3-9.html) which utilizes AI to aid in the creation and animation of SVGs, but it will likely end up being closed-source and very expensive given Adobe's track record. Lottify therefore takes a different avenue, which is taking advantage the many 3D modeling tools for the creation of the animation and then simply generating an SVG or Lottie from said model.

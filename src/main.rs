@@ -58,9 +58,9 @@ impl FrameStepper {
 // const GLB: &str = "Fox_baked.glb";
 const GLB: &str = "camera3.glb";
 
-const FRAME_RATE: u64 = 30;
+const FRAME_RATE: u64 = 12;
 // This should be calculated based off the clip duration
-const FRAMES: u64 = 34;
+const FRAMES: u64 = 12;
 
 fn setup(
     mut commands: Commands,
