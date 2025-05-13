@@ -164,7 +164,6 @@ fn process_face(
     mapping: &mut HashMap<usize, Vertex>,
 ) -> ProcessResult {
     let mut face_indices = indices.clone();
-    // println!("--face--");
 
     let mut to_commit = Vec::new();
 
@@ -184,12 +183,10 @@ fn process_face(
         );
 
         let mut new_path = Path::new([e1, e2].into());
-        // println!("New path: {:?}", new_path);
 
         // Vertex is already in mapping
         if let Some(v) = mapping.get(&hash) {
             let mut vertex = v.clone();
-            // println!("Already in: {}", hash);
             let mut replacement_paths: Vec<Path> = Vec::new();
 
             // Iterate through existing paths to check for overlap with new path
@@ -203,15 +200,10 @@ fn process_face(
                     // Aligned edges
                     JointLevel::SharedEdge => {
                         // Skip this face
-                        // println!("SKIP");
-                        // This might not work that easily
-                        // mapping.insert(hash, vertex);
                         return ProcessResult::Skip;
                     }
                     JointLevel::MergeEdge => {
-                        // println!("MERGE: {:?} {:?}", new_path, path);
                         new_path = new_path.merge(path.clone());
-                        // println!("OUT: {:?}", new_path);
                     }
                 }
             }
@@ -222,13 +214,9 @@ fn process_face(
 
             vertex.paths = replacement_paths;
 
-            // println!("Reinsert");
-            // mapping.insert(hash, vertex);
             to_commit.push((hash, vertex));
         } else {
-            // println!("New insert: {}", hash);
             to_commit.push((hash, Vertex::new(vec![new_path], [pos[0], pos[1]])));
-            // mapping.insert(hash, Vertex::new(vec![new_path], [pos[0], pos[1]]));
         }
 
         face_indices.insert(0, index);
@@ -277,13 +265,6 @@ pub fn generate_shape(
             }
         }
 
-        // println!("Mapping:");
-        // for (hash, vert) in mapping.iter() {
-        //     println!("{} {:?}", hash, vert);
-        // }
-
-        // draw_mapping(&mapping, scene);
-
         let mut used: Vec<&Path> = Vec::new();
         let mut shape = Vec::new();
 
@@ -311,7 +292,6 @@ pub fn generate_shape(
                         }
                     }
 
-                    // next = path.edges.iter().next().unwrap();
                     used.push(path);
                     flag = true;
                     break;
@@ -334,9 +314,6 @@ pub fn generate_shape(
                 let next_vert = mapping.get(&next.vertex_hash).unwrap();
                 let mut found_next = false;
 
-                // println!("curr: {} -> next: {:?}", curr, next.vertex_hash);
-                // println!("{:?}", next_vert);
-
                 shape.push(PathEl::LineTo(
                     (
                         round_to(next_vert.position[0] * SCALE, 3),
@@ -344,11 +321,6 @@ pub fn generate_shape(
                     )
                         .into(),
                 ));
-                // shape.push(PathEl::QuadTo(
-                //     (next_vert.position[0] + 0.01, -next_vert.position[1] + 0.01).into(),
-                //     (next_vert.position[0], -next_vert.position[1]).into(),
-                // ));
-                // used.push(next.vertex_hash);
 
                 'path: for path in &next_vert.paths {
                     if !path.contains(curr) {
@@ -380,12 +352,9 @@ pub fn generate_shape(
 
             shape.push(PathEl::ClosePath);
             tmp.extend(shape.clone());
-            // out.shapes.push(Shape::new(shape.clone()));
 
             shape.clear();
         }
-
-        // out.shapes.push(Shape::new(shape.clone()));
 
         if !skipped_faces.is_empty() {
             curr_face_batch = skipped_faces.clone();
