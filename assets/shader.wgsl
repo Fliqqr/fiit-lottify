@@ -163,7 +163,6 @@ fn vertex(vertex_no_morph: Vertex) -> VertexOutput {
     let first_vertex = mesh[vertex_no_morph.instance_index].first_vertex_index;
     let vertex_index = vertex_no_morph.index - first_vertex;
 
-    // positions[vertex.mesh_offset + vertex_index] = vec4<f32>(position_clip_to_view(out.position), 1.0);
     let ndc = position_world_to_ndc(out.world_position.xyz);
 
     positions[vertex.mesh_offset + vertex_index] = vec4<f32>(
@@ -172,9 +171,7 @@ fn vertex(vertex_no_morph: Vertex) -> VertexOutput {
         out.world_position.z,
         1.0
     );
-    // positions[vertex.mesh_offset + vertex_index] = vec4<f32>(calculate_view(out.world_position, false), 1.0);
     
-
     return out;
 }
 

@@ -1,11 +1,13 @@
 use bevy::prelude::*;
 use bevy_egui::{
-    egui::{self, Align2},
     EguiContexts,
+    egui::{self, Align2},
 };
+use nfd::Response;
 
-use crate::{CachedMeshData, Exporter, FrameStepper, PathHighlight};
+use crate::{CachedMeshData, Exporter, FrameStepper, GltfScene, PathHighlight, load_file};
 
+#[allow(clippy::too_many_arguments)]
 pub fn controls_ui(
     exporter: Res<Exporter>,
     mut commands: Commands,
@@ -13,6 +15,8 @@ pub fn controls_ui(
     mut fs: ResMut<FrameStepper>,
     mut highlight: ResMut<PathHighlight>,
     mut mesh_data: ResMut<CachedMeshData>,
+    asset_server: Res<'_, AssetServer>,
+    existing_scenes: Query<Entity, With<GltfScene>>,
 ) {
     let control_panel =
         egui::TopBottomPanel::new(egui::panel::TopBottomSide::Top, "Controls").resizable(false);
@@ -24,9 +28,26 @@ pub fn controls_ui(
             if ui.button("Export SVG").clicked() {
                 commands.run_system(exporter.svg);
             }
+
             if ui.button("Export Lottie").clicked() {
                 println!("UI Export Lottie");
                 commands.run_system(exporter.lottie);
+            }
+
+            if ui.button("Open File").clicked() {
+                let result = nfd::open_file_dialog(None, None).unwrap_or_else(|e| {
+                    panic!("{}", e);
+                });
+
+                match result {
+                    Response::Okay(file_path) => {
+                        load_file(file_path.clone(), commands, asset_server, existing_scenes);
+
+                        println!("File path = {:?}", file_path)
+                    }
+                    Response::OkayMultiple(files) => println!("Files {:?}", files),
+                    Response::Cancel => println!("User canceled"),
+                }
             }
         });
     });

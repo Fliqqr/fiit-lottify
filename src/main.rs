@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
-use bevy_vello::{prelude::*, vello::kurbo::PathEl, VelloPlugin};
+use bevy_vello::{VelloPlugin, prelude::*, vello::kurbo::PathEl};
 
 use export::{ExportLottie, Exporter};
 use shader::PositionsShader;
@@ -55,8 +55,8 @@ impl FrameStepper {
 }
 
 // const ASSETS: &str = "./assets";
-// const GLB: &str = "Fox_baked.glb";
-const GLB: &str = "camera3.glb";
+const GLB: &str = "Fox_baked.glb";
+// const GLB: &str = "camera3.glb";
 
 const FRAME_RATE: u64 = 30;
 // This should be calculated based off the clip duration
@@ -77,6 +77,29 @@ fn setup(
     commands.spawn(VelloSceneBundle::default());
 
     // Insert a placeholder for animations until the GLTF is fully loaded
+    commands.insert_resource(PendingAnimations { gltf_handle });
+}
+
+fn load_file(
+    file_name: String,
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    existing_scenes: Query<Entity, With<GltfScene>>,
+) {
+    // Despawn all existing GltfScenes
+    for entity in existing_scenes.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+
+    // Load the new scene
+    let gltf_handle = asset_server.load(&file_name);
+
+    commands.spawn((
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset(file_name))),
+        GltfScene,
+    ));
+
+    // Insert a placeholder for animations
     commands.insert_resource(PendingAnimations { gltf_handle });
 }
 

@@ -5,13 +5,13 @@ use bevy::{
 use bevy_vello::vello::kurbo::PathEl;
 
 use esvg::page::Page;
-use esvg::{create_document, Element};
+use esvg::{Element, create_document};
 
 use crate::{
+    FRAME_RATE, FRAMES, FrameStepper, GLB,
     lottie::Lottie,
     systems::cache::CachedMeshData,
     vectorize::{generate_shapes, models::MeshShape},
-    FrameStepper, FRAMES, FRAME_RATE, GLB,
 };
 
 #[derive(ScheduleLabel, Eq, PartialEq, Clone, Debug, Hash)]
