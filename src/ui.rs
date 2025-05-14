@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 use bevy_egui::{
     EguiContexts,
-    egui::{self, Align2},
+    egui::{self, Align2, vec2},
 };
 use nfd::Response;
 
-use crate::{CachedMeshData, Exporter, FrameStepper, GltfScene, PathHighlight, load_file};
+use crate::{CachedMeshData, Exporter, FrameStepper, PathHighlight, VelloScene, load_file};
 
 #[allow(clippy::too_many_arguments)]
 pub fn controls_ui(
@@ -16,13 +16,15 @@ pub fn controls_ui(
     mut highlight: ResMut<PathHighlight>,
     mut mesh_data: ResMut<CachedMeshData>,
     asset_server: Res<'_, AssetServer>,
-    existing_scenes: Query<Entity, With<GltfScene>>,
+    existing_scenes: Query<Entity, Without<VelloScene>>,
 ) {
     let control_panel =
         egui::TopBottomPanel::new(egui::panel::TopBottomSide::Top, "Controls").resizable(false);
 
     control_panel.show(contexts.ctx_mut(), |ui| {
         // ui.heading("Control panel");
+
+        ui.style_mut().spacing.menu_margin = vec2(16.0, 16.0).into();
 
         ui.horizontal(|ui| {
             if ui.button("Export SVG").clicked() {
@@ -41,7 +43,13 @@ pub fn controls_ui(
 
                 match result {
                     Response::Okay(file_path) => {
-                        load_file(file_path.clone(), commands, asset_server, existing_scenes);
+                        load_file(
+                            file_path.clone(),
+                            commands,
+                            asset_server,
+                            existing_scenes,
+                            &mut fs,
+                        );
 
                         println!("File path = {:?}", file_path)
                     }
@@ -79,12 +87,14 @@ pub fn controls_ui(
                 // ui.dnd_drag_source(id, payload, add_contents)
 
                 ui.vertical(|ui| {
-                    if ui.button("up").clicked() {
-                        new_ordering.swap(index, index - 1);
-                    };
-                    if ui.button("down").clicked() {
-                        new_ordering.swap(index, index + 1);
-                    };
+                    ui.horizontal(|ui| {
+                        if ui.button("up").clicked() {
+                            new_ordering.swap(index, index - 1);
+                        };
+                        if ui.button("down").clicked() {
+                            new_ordering.swap(index, index + 1);
+                        };
+                    });
 
                     if ui
                         .heading(name)
@@ -132,6 +142,9 @@ pub fn controls_ui(
 
     animation_bar.show(contexts.ctx_mut(), |ui| {
         // ui.heading("Animation control");
+
+        ui.style_mut().spacing.menu_margin = vec2(16.0, 16.0).into();
+        ui.style_mut().spacing.window_margin = vec2(16.0, 16.0).into();
 
         let frames = fs.total_frames;
 

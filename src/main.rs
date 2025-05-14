@@ -24,6 +24,9 @@ https://lottie.github.io/lottie-spec/1.0/single-page/
 #[derive(Component)]
 struct GltfScene;
 
+#[derive(Component)]
+struct VelloScene;
+
 #[derive(Resource, Default, Clone)]
 struct FrameStepper {
     current_frame: u64,
@@ -58,9 +61,9 @@ impl FrameStepper {
 // const GLB: &str = "Fox_baked.glb";
 const GLB: &str = "camera3.glb";
 
-const FRAME_RATE: u64 = 12;
+const FRAME_RATE: u64 = 30;
 // This should be calculated based off the clip duration
-const FRAMES: u64 = 12;
+const FRAMES: u64 = 60;
 
 fn setup(
     mut commands: Commands,
@@ -74,7 +77,7 @@ fn setup(
         GltfScene,
     ));
 
-    commands.spawn(VelloSceneBundle::default());
+    commands.spawn((VelloSceneBundle::default(), VelloScene));
 
     // Insert a placeholder for animations until the GLTF is fully loaded
     commands.insert_resource(PendingAnimations { gltf_handle });
@@ -84,11 +87,14 @@ fn load_file(
     file_name: String,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    existing_scenes: Query<Entity, With<GltfScene>>,
+    existing_scenes: Query<Entity, Without<VelloScene>>,
+    fs: &mut ResMut<FrameStepper>,
 ) {
+    fs.shapes_buffer = None;
+
     // Despawn all existing GltfScenes
     for entity in existing_scenes.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 
     // Load the new scene
