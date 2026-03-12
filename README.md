@@ -26,9 +26,14 @@ Lottify is not a raster image to vector converter. Typical vectorization tools t
 - Running the algorithm on the GPU for real-time preview
 - Blender plugin allowing for real-time vectorized preview while modelling 
 
+(Some SVGs have been edited in Inkscape after rendering.)
+
+![svg](renders/porche_shaded.svg)
+Fig. 1: Vectorized Porche model with normal-based shading
 
 ![3d](images/penguin_3dmodel.png)
-Fig. 1: 3D Model
+Fig. 2: 3D Penguin Model
 
 ![svg](images/penguin_vector.svg)
-Fig. 2: Vectorized
+Fig. 3: Vectorized Penguin Model
+
