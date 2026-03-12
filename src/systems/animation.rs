@@ -11,19 +11,6 @@ pub struct Animations {
     pub graph: Handle<AnimationGraph>,
 }
 
-// pub fn get_animations(targets: Query<&AnimationTarget>, clips: Res<Assets<AnimationClip>>) {
-//     println!("Clips: {}", clips.len());
-//     println!("Getting all animation targets...");
-
-//     // for target in targets.iter() {
-//     //     println!("Target: {:?}", target.id);
-//     // }
-
-//     for clip in clips.iter() {
-//         println!("Clip: {:?}", clip.1.duration());
-//     }
-// }
-
 #[allow(unused)]
 pub fn play_animation(
     mut commands: Commands,
